@@ -1,0 +1,24 @@
+{
+  "C_Cpp.files.exclude": {
+    "**/.vscode": true,
+    "**/.vs": true
+  },
+  "C_Cpp.default.defines": ["_EE"],
+  "C_Cpp.default.includePath": [
+    "/usr/local/ps2dev/ps2sdk/common/include",
+    "/usr/local/ps2dev/ps2sdk/ee/include",
+    "/usr/local/ps2dev/ps2sdk/iop/include",
+    "/usr/local/ps2dev/ps2sdk/ports/include",
+    "${default}"
+  ],
+  "files.associations": {
+    "*.html": "php",
+    "kernel.h": "c",
+    "stdlib.h": "c",
+    "math3d.h": "c",
+    "tamtypes.h": "c",
+    "limits.h": "c",
+    "gs_privileged.h": "c",
+    "gs_psm.h": "c"
+  }
+}
