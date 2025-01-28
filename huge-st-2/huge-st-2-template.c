@@ -31,11 +31,11 @@
 #include <draw3d.h>
 
 #ifndef HUGE_S_VALUE
-#define HUGE_S_VALUE 1e38
+#define HUGE_S_VALUE (0.0f / 0.0f)
 #endif
 
 #ifndef HUGE_T_VALUE
-#define HUGE_T_VALUE 1e38
+#define HUGE_T_VALUE (0.0f / 0.0f)
 #endif
 
 #ifndef HUGE_ST
@@ -75,7 +75,8 @@ int points[36] = {
 		16, 17, 18,
 		17, 18, 19,
 		20, 21, 22,
-		21, 22, 23};
+		21, 22, 23
+};
 
 int vertex_count = 24;
 
@@ -169,7 +170,7 @@ VECTOR object_rotation = {0.00f, 0.00f, 0.00f, 1.00f};
 VECTOR camera_position = {0.00f, 0.00f, 100.00f, 1.00f};
 VECTOR camera_rotation = {0.00f, 0.00f, 0.00f, 1.00f};
 
-void make_checkboard()
+void make_texture()
 {
 	for (int x = 0; x < 256; x++)
 	{
@@ -484,7 +485,7 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 
 int main(int argc, char *argv[])
 {
-	make_checkboard();
+	make_texture();
 
 	// The buffers to be used.
 	framebuffer_t frame;
