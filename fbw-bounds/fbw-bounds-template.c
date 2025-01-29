@@ -286,7 +286,7 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 		q++;
 		PACK_GIFTAG(q, GS_SET_FRAME(frame->address >> 11, FBW, frame->psm, frame->mask), GS_REG_FRAME_1);
 		q++;
-		PACK_GIFTAG(q, GS_SET_SCISSOR(0, FRAME_WIDTH - 1, 0, FRAME_HEIGHT - 1), GS_REG_SCISSOR_1);
+		PACK_GIFTAG(q, GS_SET_SCISSOR(0, 2 * FRAME_WIDTH, 0, 2 * FRAME_HEIGHT), GS_REG_SCISSOR_1);
 		q++;
 
 		// Use a 64-bit pointer to simplify adding data to the packet.
@@ -294,14 +294,14 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 
 		*dw++ = GIF_SET_RGBAQ(0xFF, 0, 0, 0x80, bit_cast_float(1.0f));
 		*dw++ = GIF_SET_ST(bit_cast_float(0.0f), bit_cast_float(0.0f));
-		*dw++ = GIF_SET_XYZ(WINDOW_X << 4, WINDOW_Y << 4, 0);
+		*dw++ = GIF_SET_XYZ((WINDOW_X + FRAME_WIDTH) << 4, (WINDOW_Y + FRAME_HEIGHT) << 4, 0);
 		
 		*dw++ = GIF_SET_RGBAQ(0, 0, 0xFF, 0x80, bit_cast_float(1.0f));
 		*dw++ = GIF_SET_ST(
 			bit_cast_float((float) TEXTURE_WIDTH / (1 << TW)),
 			bit_cast_float((float) TEXTURE_HEIGHT / (1 << TH))
 		);
-		*dw++ = GIF_SET_XYZ((WINDOW_X + FRAME_WIDTH) << 4, (WINDOW_Y + FRAME_HEIGHT) << 4, 0);
+		*dw++ = GIF_SET_XYZ((WINDOW_X + 2 * FRAME_WIDTH) << 4, (WINDOW_Y + 2 * FRAME_HEIGHT) << 4, 0);
 		
 // For triangle
 #if PRIM_TYPE == 1
