@@ -30,12 +30,14 @@
 #include <draw.h>
 #include <draw3d.h>
 
+#define NORMAL_ST_VALUE 10
+
 #ifndef HUGE_S_VALUE
-#define HUGE_S_VALUE (0.0f / 0.0f)
+#define HUGE_S_VALUE 1e38
 #endif
 
 #ifndef HUGE_T_VALUE
-#define HUGE_T_VALUE (0.0f / 0.0f)
+#define HUGE_T_VALUE 1e38
 #endif
 
 #ifndef HUGE_ST
@@ -55,112 +57,34 @@
 #define CLAMP_WRAP_MODE_T 0
 #endif
 
-// Type 1 for small squares with 2 colors
-// Type 2 for 4 large squares with 4 different colors
+// Type 1 for 4 large squares with 4 different colors:
+// 0xFF0000, 0xFFFF00,
+// 0x0000FF, 0x00FFFF
+// Type 2 for small squares with 2 colors
 #ifndef CHECKERBOARD_TYPE
 #define CHECKERBOARD_TYPE 1
 #endif
 
-int points_count = 36;
-
-int points[36] = {
+int points[6] = {
 		0, 1, 2,
 		1, 2, 3,
-		4, 5, 6,
-		5, 6, 7,
-		8, 9, 10,
-		9, 10, 11,
-		12, 13, 14,
-		13, 14, 15,
-		16, 17, 18,
-		17, 18, 19,
-		20, 21, 22,
-		21, 22, 23
 };
 
 int vertex_count = 24;
 
-VECTOR vertices[24] = {
-		{10.00f, 10.00f, 10.00f, 1.00f},
-		{10.00f, 10.00f, -10.00f, 1.00f},
-		{10.00f, -10.00f, 10.00f, 1.00f},
-		{10.00f, -10.00f, -10.00f, 1.00f},
-		{-10.00f, 10.00f, 10.00f, 1.00f},
-		{-10.00f, 10.00f, -10.00f, 1.00f},
-		{-10.00f, -10.00f, 10.00f, 1.00f},
-		{-10.00f, -10.00f, -10.00f, 1.00f},
-		{-10.00f, 10.00f, 10.00f, 1.00f},
-		{10.00f, 10.00f, 10.00f, 1.00f},
-		{-10.00f, 10.00f, -10.00f, 1.00f},
-		{10.00f, 10.00f, -10.00f, 1.00f},
-		{-10.00f, -10.00f, 10.00f, 1.00f},
-		{10.00f, -10.00f, 10.00f, 1.00f},
-		{-10.00f, -10.00f, -10.00f, 1.00f},
-		{10.00f, -10.00f, -10.00f, 1.00f},
-		{-10.00f, 10.00f, 10.00f, 1.00f},
-		{10.00f, 10.00f, 10.00f, 1.00f},
-		{-10.00f, -10.00f, 10.00f, 1.00f},
-		{10.00f, -10.00f, 10.00f, 1.00f},
-		{-10.00f, 10.00f, -10.00f, 1.00f},
-		{10.00f, 10.00f, -10.00f, 1.00f},
-		{-10.00f, -10.00f, -10.00f, 1.00f},
-		{10.00f, -10.00f, -10.00f, 1.00f}};
+int vertices[4][2] = {
+		{-100, -100},
+		{100, -100},
+		{-100, 100},
+		{100, 100}
+};
 
-VECTOR colours[24] = {
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f},
-		{1.00f, 1.00f, 1.00f, 1.00f}};
-
-// #define MAX_ST_VAL ((255.0f + (15.0f / 16.0f)) / 256.0f)
-#define MAX_ST_VAL 10
-// #define MAX_ST_VAL 0.5
-
-VECTOR coordinates[24] = {
-		{0.00f, 0.00f, 0.00f, 0.00f},
-		{MAX_ST_VAL, 0.00f, 0.00f, 0.00f},
-		{0.00f, MAX_ST_VAL, 0.00f, 0.00f},
-		{MAX_ST_VAL, MAX_ST_VAL, 0.00f, 0.00f},
-		{0.00f, 0.00f, 0.00f, 0.00f},
-		{MAX_ST_VAL, 0.00f, 0.00f, 0.00f},
-		{0.00f, MAX_ST_VAL, 0.00f, 0.00f},
-		{MAX_ST_VAL, MAX_ST_VAL, 0.00f, 0.00f},
-		{0.00f, 0.00f, 0.00f, 0.00f},
-		{MAX_ST_VAL, 0.00f, 0.00f, 0.00f},
-		{0.00f, MAX_ST_VAL, 0.00f, 0.00f},
-		{MAX_ST_VAL, MAX_ST_VAL, 0.00f, 0.00f},
-		{0.00f, 0.00f, 0.00f, 0.00f},
-		{MAX_ST_VAL, 0.00f, 0.00f, 0.00f},
-		{0.00f, MAX_ST_VAL, 0.00f, 0.00f},
-		{MAX_ST_VAL, MAX_ST_VAL, 0.00f, 0.00f},
-		{0.00f, 0.00f, 0.00f, 0.00f},
-		{MAX_ST_VAL, 0.00f, 0.00f, 0.00f},
-		{0.00f, MAX_ST_VAL, 0.00f, 0.00f},
-		{MAX_ST_VAL, MAX_ST_VAL, 0.00f, 0.00f},
-		{0.00f, 0.00f, 0.00f, 0.00f},
-		{MAX_ST_VAL, 0.00f, 0.00f, 0.00f},
-		{0.00f, MAX_ST_VAL, 0.00f, 0.00f},
-		{MAX_ST_VAL, MAX_ST_VAL, 0.00f, 0.00f}};
+float coordinates[4][2] = {
+		{0.00f, 0.00f},
+		{NORMAL_ST_VALUE, 0.00f},
+		{0.00f, NORMAL_ST_VALUE},
+		{NORMAL_ST_VALUE, NORMAL_ST_VALUE}
+};
 
 unsigned char texture_data[256 * 256 * 3] __attribute__((aligned(16)));
 
@@ -351,19 +275,8 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 	packet_t *packets[2];
 	packet_t *current;
 
-	MATRIX local_world;
-	MATRIX world_view;
-	MATRIX view_screen;
-	MATRIX local_screen;
-
 	prim_t prim;
 	color_t color;
-
-	VECTOR *temp_vertices;
-
-	xyz_t *xyz;
-	color_t *rgbaq;
-	texel_t *st;
 
 	packets[0] = packet_init(100, PACKET_NORMAL);
 	packets[1] = packet_init(100, PACKET_NORMAL);
@@ -378,22 +291,11 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 	prim.mapping_type = PRIM_MAP_ST;
 	prim.colorfix = PRIM_UNFIXED;
 
-	color.r = 0xFF;
+	color.r = 0x00;
 	color.g = 0x00;
 	color.b = 0x00;
 	color.a = 0x80;
 	color.q = 1.0f;
-
-	// Allocate calculation space.
-	temp_vertices = memalign(128, sizeof(VECTOR) * vertex_count);
-
-	// Allocate register space.
-	xyz = memalign(128, sizeof(u64) * vertex_count);
-	rgbaq = memalign(128, sizeof(u64) * vertex_count);
-	st = memalign(128, sizeof(u64) * vertex_count);
-
-	// Create the view_screen matrix.
-	create_view_screen(view_screen, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
 
 	// The main loop...
 	for (;;)
@@ -403,33 +305,6 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 
 		current = packets[context];
 
-		// Spin the cube a bit.
-		// object_rotation[0] += 0.008f; while (object_rotation[0] > 3.14f) { object_rotation[0] -= 6.28f; }
-		// object_rotation[1] += 0.012f; while (object_rotation[1] > 3.14f) { object_rotation[1] -= 6.28f; }
-
-		// Create the local_world matrix.
-		create_local_world(local_world, object_position, object_rotation);
-
-		// Create the world_view matrix.
-		create_world_view(world_view, camera_position, camera_rotation);
-
-		// Create the local_screen matrix.
-		create_local_screen(local_screen, local_world, world_view, view_screen);
-
-		// Calculate the vertex values.
-		calculate_vertices(temp_vertices, vertex_count, vertices, local_screen);
-
-		// Generate the XYZ register values.
-		draw_convert_xyz(xyz, 2048, 2048, 32, vertex_count, (vertex_f_t *)temp_vertices);
-
-		draw_convert_rgbq(rgbaq, vertex_count, (vertex_f_t *)temp_vertices, (color_f_t *)colours, color.a);
-
-		// Generate the ST register values.
-		draw_convert_st(st, vertex_count, (vertex_f_t *)temp_vertices, (texel_f_t *)coordinates);
-#if HUGE_ST == 1
-		st[points[24]].s = HUGE_S_VALUE;
-		st[points[24]].t = HUGE_T_VALUE;
-#endif
 		q = current->data;
 
 		// Clear framebuffer but don't update zbuffer.
@@ -443,17 +318,30 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 		// Use a 64-bit pointer to simplify adding data to the packet.
 		dw = (u64 *)draw_prim_start(q, 0, &prim, &color);
 
-		for (i = 24; i < 30; i++)
+		for (i = 0; i < 6; i++)
 		{
-			*dw++ = rgbaq[points[i]].rgbaq;
-			*dw++ = st[points[i]].uv;
-			*dw++ = xyz[points[i]].xyz;
+			*dw++ = color.rgbaq;
+
+			texel_t texel;
+			texel.s = coordinates[points[i]][0];
+			texel.t = coordinates[points[i]][1];
+			if (HUGE_ST && i == 0)
+			{
+				texel.s = HUGE_S_VALUE;
+				texel.t = HUGE_T_VALUE;
+			}
+			*dw++ = texel.uv;
+
+			xyz_t xyz;
+			xyz.x = (vertices[points[i]][0] + 2048) << 4;
+			xyz.y = (vertices[points[i]][1] + 2048) << 4;
+			xyz.z = 0;
+			*dw++ = xyz.xyz;
 		}
 
 		// Check if we're in middle of a qword or not.
 		if ((u32)dw % 16)
 		{
-
 			*dw++ = 0;
 		}
 
