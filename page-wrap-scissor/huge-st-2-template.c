@@ -30,10 +30,10 @@
 #include <draw.h>
 #include <draw3d.h>
 
-#define NORMAL_ST_VALUE 1
+#define NORMAL_ST_VALUE 10
 
 #ifndef HUGE_S_VALUE
-#define HUGE_S_VALUE -1e38
+#define HUGE_S_VALUE 1e38
 #endif
 
 #ifndef HUGE_T_VALUE
@@ -69,6 +69,8 @@ int points[6] = {
 		0, 1, 2,
 		1, 2, 3,
 };
+
+int vertex_count = 24;
 
 int vertices[4][2] = {
 		{-100, -100},
@@ -111,7 +113,7 @@ void make_texture()
 				texture_data[3 * x * 256 + 3 * y + 1] = 0x00;
 				texture_data[3 * x * 256 + 3 * y + 2] = 0xFF;
 			}
-			else // x >= 128 && y >= 128
+			else
 			{
 				texture_data[3 * x * 256 + 3 * y + 0] = 0x00;
 				texture_data[3 * x * 256 + 3 * y + 1] = 0xFF;
@@ -175,7 +177,7 @@ void init_drawing_environment(framebuffer_t *frame, zbuffer_t *z)
 	q = draw_setup_environment(q, 0, frame, z);
 
 	// Now reset the primitive origin to 2048-width/2,2048-height/2.
-	q = draw_primitive_xyoffset(q, 0, 2048 - frame->width/2, 2048 - frame->height/2);
+	q = draw_primitive_xyoffset(q, 0, (2048 - 320), (2048 - 256));
 
 	// Finish setting up the environment.
 	q = draw_finish(q);
