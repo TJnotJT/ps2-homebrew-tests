@@ -10,7 +10,7 @@ include ../Makefile.destdir
 
 EE_LIBS = -ldraw -lgraph -lmath3d -lpacket -ldma
 
-all: huge-st-2-huge.elf huge-st-2-normal.elf
+all: huge-st-2.elf
 
 %.elf: %.o
 	$(DIR_GUARD)
@@ -20,11 +20,8 @@ ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
 
-huge-st-2-normal.o: huge-st-2-template.c
+huge-st-2.o: huge-st-2-template.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -DHUGE_ST=0 -c $< -o $@
-
-huge-st-2-huge.o: huge-st-2-template.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DHUGE_ST=1 -c $< -o $@
 
 clean:
 	rm -f huge-st-2-huge.elf huge-st-2-normal.elf huge-st-2-huge.o huge-st-2-normal.o

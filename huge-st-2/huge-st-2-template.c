@@ -30,19 +30,15 @@
 #include <draw.h>
 #include <draw3d.h>
 
+#define FRAME_WIDTH 640
+#define FRAME_HEIGHT 512
+#define WINDOW_X (2048 - (FRAME_WIDTH / 2))
+#define WINDOW_Y (2048 - (FRAME_HEIGHT / 2))
+#define TEXTURE_WIDTH 256
+#define TEXTURE_HEIGHT 256
+#define SQUARE_WIDTH 200
 #define NORMAL_ST_VALUE 1
-
-#ifndef HUGE_S_VALUE
-#define HUGE_S_VALUE -1e38
-#endif
-
-#ifndef HUGE_T_VALUE
-#define HUGE_T_VALUE 1e38
-#endif
-
-#ifndef HUGE_ST
-#define HUGE_ST 1
-#endif
+#define HUGE_ST_VALUE 1e38f
 
 // REPEAT 0
 // CLAMP 1
@@ -56,6 +52,7 @@
 #ifndef CLAMP_WRAP_MODE_T
 #define CLAMP_WRAP_MODE_T 0
 #endif
+
 
 // Type 1 for 4 large squares with 4 different colors:
 // 0xFF0000, 0xFFFF00,
@@ -71,10 +68,10 @@ int points[6] = {
 };
 
 int vertices[4][2] = {
-		{-100, -100},
-		{100, -100},
-		{-100, 100},
-		{100, 100}
+		{0, 0},
+		{SQUARE_WIDTH, 0},
+		{0, SQUARE_WIDTH},
+		{SQUARE_WIDTH, SQUARE_WIDTH}
 };
 
 float coordinates[4][2] = {
@@ -84,51 +81,51 @@ float coordinates[4][2] = {
 		{NORMAL_ST_VALUE, NORMAL_ST_VALUE}
 };
 
-unsigned char texture_data[256 * 256 * 3] __attribute__((aligned(16)));
+unsigned char texture_data[TEXTURE_WIDTH][TEXTURE_HEIGHT][3] __attribute__((aligned(16)));
 
 void make_texture()
 {
-	for (int x = 0; x < 256; x++)
+	for (int x = 0; x < TEXTURE_WIDTH; x++)
 	{
-		for (int y = 0; y < 256; y++)
+		for (int y = 0; y < TEXTURE_HEIGHT; y++)
 		{
 #if CHECKERBOARD_TYPE == 1
-			if (x < 128 && y < 128)
+			if (x < (TEXTURE_WIDTH / 2) && y < (TEXTURE_HEIGHT / 2))
 			{
-				texture_data[3 * x * 256 + 3 * y + 0] = 0xFF;
-				texture_data[3 * x * 256 + 3 * y + 1] = 0x00;
-				texture_data[3 * x * 256 + 3 * y + 2] = 0x00;
+				texture_data[x][y][0] = 0xFF;
+				texture_data[x][y][1] = 0x00;
+				texture_data[x][y][2] = 0x00;
 			}
-			else if (x >= 128 && y < 128)
+			else if (x >= (TEXTURE_WIDTH / 2) && y < (TEXTURE_HEIGHT / 2))
 			{
-				texture_data[3 * x * 256 + 3 * y + 0] = 0xFF;
-				texture_data[3 * x * 256 + 3 * y + 1] = 0xFF;
-				texture_data[3 * x * 256 + 3 * y + 2] = 0x00;
+				texture_data[x][y][0] = 0xFF;
+				texture_data[x][y][1] = 0xFF;
+				texture_data[x][y][2] = 0x00;
 			}
-			else if (x < 128 && y >= 128)
+			else if (x < (TEXTURE_WIDTH / 2) && y >= (TEXTURE_HEIGHT / 2))
 			{
-				texture_data[3 * x * 256 + 3 * y + 0] = 0x00;
-				texture_data[3 * x * 256 + 3 * y + 1] = 0x00;
-				texture_data[3 * x * 256 + 3 * y + 2] = 0xFF;
+				texture_data[x][y][0] = 0x00;
+				texture_data[x][y][1] = 0x00;
+				texture_data[x][y][2] = 0xFF;
 			}
-			else // x >= 128 && y >= 128
+			else // x >= (TEXTURE_WIDTH / 2) && y >= (TEXTURE_HEIGHT / 2)
 			{
-				texture_data[3 * x * 256 + 3 * y + 0] = 0x00;
-				texture_data[3 * x * 256 + 3 * y + 1] = 0xFF;
-				texture_data[3 * x * 256 + 3 * y + 2] = 0xFF;
+				texture_data[x][y][0] = 0x00;
+				texture_data[x][y][1] = 0xFF;
+				texture_data[x][y][2] = 0xFF;
 			}
 #elif CHECKERBOARD_TYPE == 0
 			if (((x / 16) % 2 + (y / 16) % 2) == 1)
 			{
-				texture_data[3 * x * 256 + 3 * y + 0] = 0xFF;
-				texture_data[3 * x * 256 + 3 * y + 1] = 0x00;
-				texture_data[3 * x * 256 + 3 * y + 2] = 0xFF;
+				texture_data[x][y][0] = 0xFF;
+				texture_data[x][y][1] = 0x00;
+				texture_data[x][y][2] = 0xFF;
 			}
 			else
 			{
-				texture_data[3 * x * 256 + 3 * y + 0] = 0x00;
-				texture_data[3 * x * 256 + 3 * y + 1] = 0xFF;
-				texture_data[3 * x * 256 + 3 * y + 2] = 0x00;
+				texture_data[x][y][0] = 0x00;
+				texture_data[x][y][1] = 0xFF;
+				texture_data[x][y][2] = 0x00;
 			}
 #endif
 		}
@@ -139,8 +136,8 @@ void init_gs(framebuffer_t *frame, zbuffer_t *z, texbuffer_t *texbuf)
 {
 
 	// Define a 32-bit 640x512 framebuffer.
-	frame->width = 640;
-	frame->height = 512;
+	frame->width = FRAME_WIDTH;
+	frame->height = FRAME_HEIGHT;
 	frame->mask = 0;
 	frame->psm = GS_PSM_32;
 	frame->address = graph_vram_allocate(frame->width, frame->height, frame->psm, GRAPH_ALIGN_PAGE);
@@ -153,9 +150,9 @@ void init_gs(framebuffer_t *frame, zbuffer_t *z, texbuffer_t *texbuf)
 	z->address = graph_vram_allocate(frame->width, frame->height, z->zsm, GRAPH_ALIGN_PAGE);
 
 	// Allocate some vram for the texture buffer
-	texbuf->width = 256;
+	texbuf->width = 1 << draw_log2(TEXTURE_WIDTH);
 	texbuf->psm = GS_PSM_24;
-	texbuf->address = graph_vram_allocate(256, 256, GS_PSM_24, GRAPH_ALIGN_BLOCK);
+	texbuf->address = graph_vram_allocate(TEXTURE_WIDTH, TEXTURE_HEIGHT, GS_PSM_24, GRAPH_ALIGN_BLOCK);
 
 	// Initialize the screen and tie the first framebuffer to the read circuits.
 	graph_initialize(frame->address, frame->width, frame->height, frame->psm, 0, 0);
@@ -175,7 +172,7 @@ void init_drawing_environment(framebuffer_t *frame, zbuffer_t *z)
 	q = draw_setup_environment(q, 0, frame, z);
 
 	// Now reset the primitive origin to 2048-width/2,2048-height/2.
-	q = draw_primitive_xyoffset(q, 0, 2048 - frame->width/2, 2048 - frame->height/2);
+	q = draw_primitive_xyoffset(q, 0, WINDOW_X, WINDOW_Y);
 
 	// Finish setting up the environment.
 	q = draw_finish(q);
@@ -196,7 +193,7 @@ void load_texture(texbuffer_t *texbuf)
 
 	q = packet->data;
 
-	q = draw_texture_transfer(q, texture_data, 256, 256, GS_PSM_24, texbuf->address, texbuf->width);
+	q = draw_texture_transfer(q, texture_data, TEXTURE_WIDTH, TEXTURE_HEIGHT, GS_PSM_24, texbuf->address, texbuf->width);
 	q = draw_texture_flush(q);
 
 	FlushCache(0); // Needed because we generate data in the EE.
@@ -230,8 +227,8 @@ void setup_texture(texbuffer_t *texbuf)
 	lod.l = 0;
 	lod.k = 0;
 
-	texbuf->info.width = draw_log2(256);
-	texbuf->info.height = draw_log2(256);
+	texbuf->info.width = draw_log2(TEXTURE_WIDTH);
+	texbuf->info.height = draw_log2(TEXTURE_HEIGHT);
 	texbuf->info.components = TEXTURE_COMPONENTS_RGB;
 	texbuf->info.function = TEXTURE_FUNCTION_DECAL;
 
@@ -244,9 +241,9 @@ void setup_texture(texbuffer_t *texbuf)
 	wrap.horizontal = CLAMP_WRAP_MODE_S;
 	wrap.vertical = CLAMP_WRAP_MODE_T;
 	wrap.minu = 0;
-	wrap.maxu = 255;
+	wrap.maxu = TEXTURE_WIDTH - 1;
 	wrap.minv = 0;
-	wrap.maxv = 255;
+	wrap.maxv = TEXTURE_HEIGHT - 1;
 
 	q = draw_texture_sampling(q, 0, &lod);
 	q = draw_texturebuffer(q, 0, texbuf, &clut);
@@ -301,7 +298,7 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 
 		// Clear framebuffer but don't update zbuffer.
 		q = draw_disable_tests(q, 0, z);
-		q = draw_clear(q, 0, 2048.0f - frame->width/2, 2048.0f - frame->height/2, frame->width, frame->height, 0xFF, 0xFF, 0xFF);
+		q = draw_clear(q, 0, WINDOW_X, WINDOW_Y, frame->width, frame->height, 0xFF, 0xFF, 0xFF);
 		q++;
 
 		q = draw_enable_tests(q, 0, z);
@@ -310,25 +307,65 @@ int render(framebuffer_t *frame, zbuffer_t *z)
 		// Use a 64-bit pointer to simplify adding data to the packet.
 		dw = (u64 *)draw_prim_start(q, 0, &prim, &color);
 
-		for (i = 0; i < 6; i++)
+		for (int rect = 0; rect < 5; rect++)
 		{
-			*dw++ = color.rgbaq;
+			int offset_x, offset_y;
+			float huge_s, huge_t;
 
-			texel_t texel;
-			texel.s = coordinates[points[i]][0];
-			texel.t = coordinates[points[i]][1];
-			if (HUGE_ST && i == 0)
+			switch (rect)
 			{
-				texel.s = HUGE_S_VALUE;
-				texel.t = HUGE_T_VALUE;
+				case 0:
+					offset_x = 0;
+					offset_y = 0;
+					huge_s = 0;
+					huge_t = 0;
+					break;
+				case 1:
+					offset_x = SQUARE_WIDTH + 10;
+					offset_y = 0;
+					huge_s = -HUGE_ST_VALUE;
+					huge_t = -HUGE_ST_VALUE;
+					break;
+				case 2:
+					offset_x = 2 * (SQUARE_WIDTH + 10);
+					offset_y = 0;
+					huge_s = HUGE_ST_VALUE;
+					huge_t = -HUGE_ST_VALUE;
+					break;
+				case 3:
+					offset_x = SQUARE_WIDTH + 10;
+					offset_y = SQUARE_WIDTH + 10;
+					huge_s = -HUGE_ST_VALUE;
+					huge_t = HUGE_ST_VALUE;
+					break;
+				case 4:
+					offset_x = 2 * (SQUARE_WIDTH + 10);
+					offset_y = SQUARE_WIDTH + 10;
+					huge_s = HUGE_ST_VALUE;
+					huge_t = HUGE_ST_VALUE;
+					break;
 			}
-			*dw++ = texel.uv;
 
-			xyz_t xyz;
-			xyz.x = (vertices[points[i]][0] + 2048) << 4;
-			xyz.y = (vertices[points[i]][1] + 2048) << 4;
-			xyz.z = 0;
-			*dw++ = xyz.xyz;
+			for (i = 0; i < 6; i++)
+			{
+				*dw++ = color.rgbaq;
+
+				texel_t texel;
+				texel.s = coordinates[points[i]][0];
+				texel.t = coordinates[points[i]][1];
+				if (rect > 0 && i == 0)
+				{
+					texel.s = huge_s;
+					texel.t = huge_t;
+				}
+				*dw++ = texel.uv;
+
+				xyz_t xyz;
+				xyz.x = (vertices[points[i]][0] + WINDOW_X + offset_x) << 4;
+				xyz.y = (vertices[points[i]][1] + WINDOW_Y + offset_y) << 4;
+				xyz.z = 0;
+				*dw++ = xyz.xyz;
+			}
 		}
 
 		// Check if we're in middle of a qword or not.
