@@ -19,6 +19,13 @@
     "tamtypes.h": "c",
     "limits.h": "c",
     "gs_privileged.h": "c",
-    "gs_psm.h": "c"
+    "gs_psm.h": "c",
+    "gs_gp.h": "c",
+    "read.h": "c",
+    "gif_tags.h": "c",
+    "sio.h": "c",
+    "array": "c",
+    "string": "c",
+    "string_view": "c"
   }
 }
