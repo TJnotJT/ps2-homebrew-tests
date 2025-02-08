@@ -38,15 +38,15 @@
  (u64)((VHP)&0x00000003) << 36)
 
 typedef struct {
-  u64 RC : 3; //
-  u64 LC : 7; //
-  u64 T1248 : 2; //
-  u64 SLCK : 1; //
-  u64 CMOD : 2; //
-  u64 EX : 1; //
-  u64 PRST : 1; //
-  u64 SINT : 1; //
-  u64 XPCK : 1; //
+  u64 RC : 3;
+  u64 LC : 7;
+  u64 T1248 : 2;
+  u64 SLCK : 1;
+  u64 CMOD : 2;
+  u64 EX : 1;
+  u64 PRST : 1;
+  u64 SINT : 1;
+  u64 XPCK : 1;
   u64 PCK2 : 2;
   u64 SPML : 4;
   u64 GCONT : 1;
@@ -61,34 +61,13 @@ typedef struct {
   u64 VHP : 2;
 } SMODE1_t;
 
-// GS_SET_SMODE1(4,  32,  1, 0, 2, 0, 1, 1, 0, 0,  4, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0), //0x02
-// GS_SET_SMODE1(4,  32,  1, 0, 3, 0, 1, 1, 0, 0,  4, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0), //0x03
-// GS_SET_SMODE1(4,  32,  1, 0, 0, 0, 1, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1), //0x50
-// GS_SET_SMODE1(4,  32,  1, 0, 0, 0, 1, 1, 0, 1,  2, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1), //0x53
-// GS_SET_SMODE1(2,  22,  1, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x52
-// GS_SET_SMODE1(2,  22,  1, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0), //0x51
-// GS_SET_SMODE1(2,  15,  1, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x1A
-// GS_SET_SMODE1(3,  28,  1, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x1B
-// GS_SET_SMODE1(3,  28,  1, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x1C
-// GS_SET_SMODE1(3,  16,  0, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x1D
-// GS_SET_SMODE1(3,  16,  0, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x2A
-// GS_SET_SMODE1(6,  71,  1, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x2B
-// GS_SET_SMODE1(5,  74,  1, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x2C
-// GS_SET_SMODE1(3,  44,  1, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x2D
-// GS_SET_SMODE1(3,  25,  0, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x2E
-// GS_SET_SMODE1(3,  29,  0, 0, 0, 0, 0, 1, 0, 0,  2, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x3B
-// GS_SET_SMODE1(6,  67,  1, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x3C
-// GS_SET_SMODE1(3,  35,  1, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x3D
-// GS_SET_SMODE1(1,   7,  0, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x3E
-// GS_SET_SMODE1(1,   8,  0, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x4A
-// GS_SET_SMODE1(1,  10,  0, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x4B
-// GS_SET_SMODE1(7, 127,  3, 0, 3, 0, 1, 0, 0, 1, 15, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3), //MASK
 gs_dump_t dump __attribute__((aligned(16)));
 qword_t transfer_buffer[TRANSFER_SIZE] __attribute__((aligned(16))); // For transferring GS packets with qword alignment
 gs_registers register_buffer __attribute__((aligned(16))); // For transferring GS privileged registers with qword alignment
 
 extern GRAPH_MODE graph_mode[22]; // For inferring the video mode
 extern u64 smode1_values[22]; // For inferring the video mode
+
 void gs_transfer(u8* packet, u32 size)
 {
   assert(size % 16 == 0);
@@ -128,21 +107,24 @@ void gs_set_privileged(const u8* data, u32 init)
 
     for (int i = 0; i < 22; i++)
     {
-      u64 mask = GS_SET_SMODE1(7, 127,  3, 0, 3, 0, 1, 0, 0, 1, 15, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3);
-      u64 smode1_masked = register_buffer.SMODE1 & mask;
-      u64 smode1_values_masked = smode1_values[i] & mask;
-      SMODE1_t* smode1 = (SMODE1_t*)&register_buffer.SMODE1;
-      SMODE1_t* smode1_value = (SMODE1_t*)&smode1_values[i];
-      // PRINTF("SMODE1 %d RC=%x, LC=%x, T1248=%x, SLCK=%x, CMOD=%x, EX=%x, PRST=%x, SINT=%x, XPCK=%x, PCK2=%x, SPML=%x, GCONT=%x, PHS=%x, PVS=%x, PEHS=%x, PEVS=%x, CLKSEL=%x, NVCK=%x, SLCK2=%x, VCKSEL=%x, VHP=%x\n", i, smode1->RC, smode1->LC, smode1->T1248, smode1->SLCK, smode1->CMOD, smode1->EX, smode1->PRST, smode1->SINT, smode1->XPCK, smode1->PCK2, smode1->SPML, smode1->GCONT, smode1->PHS, smode1->PVS, smode1->PEHS, smode1->PEVS, smode1->CLKSEL, smode1->NVCK, smode1->SLCK2, smode1->VCKSEL, smode1->VHP);
-      // PRINTF("SMODE1 %d RC=%x, LC=%x, T1248=%x, SLCK=%x, CMOD=%x, EX=%x, PRST=%x, SINT=%x, XPCK=%x, PCK2=%x, SPML=%x, GCONT=%x, PHS=%x, PVS=%x, PEHS=%x, PEVS=%x, CLKSEL=%x, NVCK=%x, SLCK2=%x, VCKSEL=%x, VHP=%x\n", i, smode1_value->RC, smode1_value->LC, smode1_value->T1248, smode1_value->SLCK, smode1_value->CMOD, smode1_value->EX, smode1_value->PRST, smode1_value->SINT, smode1_value->XPCK, smode1_value->PCK2, smode1_value->SPML, smode1_value->GCONT, smode1_value->PHS, smode1_value->PVS, smode1_value->PEHS, smode1_value->PEVS, smode1_value->CLKSEL, smode1_value->NVCK, smode1_value->SLCK2, smode1_value->VCKSEL, smode1_value->VHP);
-      // PRINTF("--\n");
-      // PRINTF("SMODE1 %d %08llx %08llx\n", i, smode1_values[i], register_buffer.SMODE1);
-      if (smode1_masked == smode1_values_masked)
-      {
-        mode = i;
-        PRINTF("Mode %d\n", mode);
-        break;
-      }
+      SMODE1_t* smode1_reg = (SMODE1_t*)&register_buffer.SMODE1;
+			SMODE1_t* smode1_video_mode = (SMODE1_t*)&smode1_values[i];
+
+			// Check only the fields that are are different for different video modes
+			if (smode1_reg->RC == smode1_video_mode->RC &&
+					smode1_reg->LC == smode1_video_mode->LC &&
+					smode1_reg->T1248 == smode1_video_mode->T1248 &&
+					smode1_reg->CMOD == smode1_video_mode->CMOD &&
+					smode1_reg->PRST == smode1_video_mode->PRST &&
+					smode1_reg->PCK2 == smode1_video_mode->PCK2 &&
+					smode1_reg->SPML == smode1_video_mode->SPML &&
+					smode1_reg->VCKSEL == smode1_video_mode->VCKSEL &&
+					smode1_reg->VHP == smode1_video_mode->VHP)
+			{
+				mode = i;
+				PRINTF("Mode %d\n", mode);
+				break;
+			}
     }
 
     if (mode == -1)
@@ -171,8 +153,7 @@ void gs_set_privileged(const u8* data, u32 init)
 	*GS_REG_EXTWRITE = register_buffer.EXTWRITE;
 	*GS_REG_EXTDATA = register_buffer.EXTDATA;
 	*GS_REG_EXTBUF = register_buffer.EXTBUF;
-  // register_buffer.DISP[0].DISPFB = (register_buffer.DISP[0].DISPFB & ~0x1FF) | (0x70 - (register_buffer.DISP[0].DISPFB & 0x1FF));
-  // register_buffer.DISP[1].DISPFB = (register_buffer.DISP[1].DISPFB & ~0x1FF) | (0x70 - (register_buffer.DISP[0].DISPFB & 0x1FF));
+
   PRINTF("SET DISPFB %08llx %08llx %08llx %08llx\n", register_buffer.DISP[0].DISPFB, register_buffer.DISP[0].DISPLAY, register_buffer.DISP[1].DISPFB, register_buffer.DISP[1].DISPLAY);
 	*GS_REG_DISPFB1 = register_buffer.DISP[0].DISPFB;
 	*GS_REG_DISPLAY1 = register_buffer.DISP[0].DISPLAY;
@@ -500,7 +481,7 @@ extern u8 pcsx2_dump[] __attribute__((aligned(16)));
 
 int main(int argc, char* argv[])
 {
-  read_gs_dump(pcsx2_dump, pcsx2_dump + size_pcsx2_dump, 10);
+  read_gs_dump(pcsx2_dump, pcsx2_dump + size_pcsx2_dump, 100);
 
   return 0;
 }

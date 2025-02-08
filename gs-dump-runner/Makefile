@@ -21,8 +21,8 @@ ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
 
-pcsx2_dump.c: pcsx2_dump.gs
-	bin2c pcsx2_dump.gs pcsx2_dump.c pcsx2_dump
+pcsx2_dump.c: dumps/pcsx2_dump.gs
+	bin2c dumps/pcsx2_dump.gs pcsx2_dump.c pcsx2_dump
 
 pcsx2_dump.o: pcsx2_dump.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
