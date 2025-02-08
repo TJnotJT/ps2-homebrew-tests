@@ -18,6 +18,10 @@
 #include "my_read.h"
 #include "swizzle.h"
 
+#define TRANSFER_SIZE 0x1000
+#define PRINTF(fmt, ...) printf(fmt, ##__VA_ARGS__)
+// #define PRINTF(fmt, ...)
+
 #define GS_SET_SMODE1(RC, LC, T1248, SLCK, CMOD, EX, PRST, SINT, XPCK,    \
    PCK2, SPML, GCONT, PHS, PVS, PEHS, PEVS, CLKSEL,    \
    NVCK, SLCK2, VCKSEL, VHP)                           \
@@ -79,15 +83,12 @@ typedef struct {
 // GS_SET_SMODE1(1,   8,  0, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x4A
 // GS_SET_SMODE1(1,  10,  0, 0, 0, 0, 0, 1, 0, 0,  1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1), //0x4B
 // GS_SET_SMODE1(7, 127,  3, 0, 3, 0, 1, 0, 0, 1, 15, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3), //MASK
-
 gs_dump_t dump __attribute__((aligned(16)));
-qword_t temp_buffer[16] __attribute__((aligned(16)));
-gs_registers privileged_registers __attribute__((aligned(16)));
+qword_t transfer_buffer[TRANSFER_SIZE] __attribute__((aligned(16))); // For transferring GS packets with qword alignment
+gs_registers register_buffer __attribute__((aligned(16))); // For transferring GS privileged registers with qword alignment
 
-extern GRAPH_MODE graph_mode[22];
-
-extern u64 smode1_values[22];
-
+extern GRAPH_MODE graph_mode[22]; // For inferring the video mode
+extern u64 smode1_values[22]; // For inferring the video mode
 void gs_transfer(u8* packet, u32 size)
 {
   assert(size % 16 == 0);
@@ -99,11 +100,11 @@ void gs_transfer(u8* packet, u32 size)
 	u32 transfer_cnt = size / 16;
 	do
 	{
-    u32 transfer = transfer_cnt < 0xF000 ? transfer_cnt : 0xF000;
-    memcpy(temp_buffer, packet, transfer * sizeof(qword_t));
+    u32 transfer = transfer_cnt < TRANSFER_SIZE ? transfer_cnt : TRANSFER_SIZE;
+    memcpy(transfer_buffer, packet, transfer * sizeof(qword_t));
 
-    // TODO: Replace with dma_channel_send_normal
-	  *GIFMADR = (u32)temp_buffer;
+    // TODO: Replace with dma_channel_send_normal ?
+	  *GIFMADR = (u32)transfer_buffer;
 		*GIFQWC = transfer;
 		transfer_cnt -= transfer;
 		FlushCache(0);
@@ -116,11 +117,9 @@ void gs_transfer(u8* packet, u32 size)
 	return;
 }
 
-
-
 void gs_set_privileged(const u8* data, u32 init)
 {
-  memcpy(&privileged_registers, data, sizeof(gs_registers));
+  memcpy(&register_buffer, data, sizeof(gs_registers));
 
   if (init)
   {
@@ -130,55 +129,59 @@ void gs_set_privileged(const u8* data, u32 init)
     for (int i = 0; i < 22; i++)
     {
       u64 mask = GS_SET_SMODE1(7, 127,  3, 0, 3, 0, 1, 0, 0, 1, 15, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3);
-      u64 smode1_masked = privileged_registers.SMODE1 & mask;
+      u64 smode1_masked = register_buffer.SMODE1 & mask;
       u64 smode1_values_masked = smode1_values[i] & mask;
-      SMODE1_t* smode1 = (SMODE1_t*)&privileged_registers.SMODE1;
+      SMODE1_t* smode1 = (SMODE1_t*)&register_buffer.SMODE1;
       SMODE1_t* smode1_value = (SMODE1_t*)&smode1_values[i];
-      printf("SMODE1 %d RC=%x, LC=%x, T1248=%x, SLCK=%x, CMOD=%x, EX=%x, PRST=%x, SINT=%x, XPCK=%x, PCK2=%x, SPML=%x, GCONT=%x, PHS=%x, PVS=%x, PEHS=%x, PEVS=%x, CLKSEL=%x, NVCK=%x, SLCK2=%x, VCKSEL=%x, VHP=%x\n", i, smode1->RC, smode1->LC, smode1->T1248, smode1->SLCK, smode1->CMOD, smode1->EX, smode1->PRST, smode1->SINT, smode1->XPCK, smode1->PCK2, smode1->SPML, smode1->GCONT, smode1->PHS, smode1->PVS, smode1->PEHS, smode1->PEVS, smode1->CLKSEL, smode1->NVCK, smode1->SLCK2, smode1->VCKSEL, smode1->VHP);
-      printf("SMODE1 %d RC=%x, LC=%x, T1248=%x, SLCK=%x, CMOD=%x, EX=%x, PRST=%x, SINT=%x, XPCK=%x, PCK2=%x, SPML=%x, GCONT=%x, PHS=%x, PVS=%x, PEHS=%x, PEVS=%x, CLKSEL=%x, NVCK=%x, SLCK2=%x, VCKSEL=%x, VHP=%x\n", i, smode1_value->RC, smode1_value->LC, smode1_value->T1248, smode1_value->SLCK, smode1_value->CMOD, smode1_value->EX, smode1_value->PRST, smode1_value->SINT, smode1_value->XPCK, smode1_value->PCK2, smode1_value->SPML, smode1_value->GCONT, smode1_value->PHS, smode1_value->PVS, smode1_value->PEHS, smode1_value->PEVS, smode1_value->CLKSEL, smode1_value->NVCK, smode1_value->SLCK2, smode1_value->VCKSEL, smode1_value->VHP);
-      printf("--\n");
-      // printf("SMODE1 %d %08llx %08llx\n", i, smode1_values[i], privileged_registers.SMODE1);
+      // PRINTF("SMODE1 %d RC=%x, LC=%x, T1248=%x, SLCK=%x, CMOD=%x, EX=%x, PRST=%x, SINT=%x, XPCK=%x, PCK2=%x, SPML=%x, GCONT=%x, PHS=%x, PVS=%x, PEHS=%x, PEVS=%x, CLKSEL=%x, NVCK=%x, SLCK2=%x, VCKSEL=%x, VHP=%x\n", i, smode1->RC, smode1->LC, smode1->T1248, smode1->SLCK, smode1->CMOD, smode1->EX, smode1->PRST, smode1->SINT, smode1->XPCK, smode1->PCK2, smode1->SPML, smode1->GCONT, smode1->PHS, smode1->PVS, smode1->PEHS, smode1->PEVS, smode1->CLKSEL, smode1->NVCK, smode1->SLCK2, smode1->VCKSEL, smode1->VHP);
+      // PRINTF("SMODE1 %d RC=%x, LC=%x, T1248=%x, SLCK=%x, CMOD=%x, EX=%x, PRST=%x, SINT=%x, XPCK=%x, PCK2=%x, SPML=%x, GCONT=%x, PHS=%x, PVS=%x, PEHS=%x, PEVS=%x, CLKSEL=%x, NVCK=%x, SLCK2=%x, VCKSEL=%x, VHP=%x\n", i, smode1_value->RC, smode1_value->LC, smode1_value->T1248, smode1_value->SLCK, smode1_value->CMOD, smode1_value->EX, smode1_value->PRST, smode1_value->SINT, smode1_value->XPCK, smode1_value->PCK2, smode1_value->SPML, smode1_value->GCONT, smode1_value->PHS, smode1_value->PVS, smode1_value->PEHS, smode1_value->PEVS, smode1_value->CLKSEL, smode1_value->NVCK, smode1_value->SLCK2, smode1_value->VCKSEL, smode1_value->VHP);
+      // PRINTF("--\n");
+      // PRINTF("SMODE1 %d %08llx %08llx\n", i, smode1_values[i], register_buffer.SMODE1);
       if (smode1_masked == smode1_values_masked)
       {
         mode = i;
-        printf("Mode %d\n", mode);
+        PRINTF("Mode %d\n", mode);
         break;
       }
     }
 
     if (mode == -1)
     {
-      printf("Unknown mode\n");
+      PRINTF("Unknown mode\n");
       return;
     }
 
     // TODO: Infer the mode and field/flicker_filter from the registers
     // This function modifies CSR and IMR so we chould restore them after
-    u32 interlace = !!(privileged_registers.SMODE2 & 1);
-    u32 ffmd = !!(privileged_registers.SMODE2 & 2);
+    u32 interlace = !!(register_buffer.SMODE2 & 1);
+    u32 ffmd = !!(register_buffer.SMODE2 & 2);
     graph_set_mode(interlace, mode, ffmd, GRAPH_ENABLE);
 
-    *GS_REG_SYNCHV = privileged_registers.SYNCV;
-    *GS_REG_SYNCH2 = privileged_registers.SYNCH2;
-    *GS_REG_SYNCH1 = privileged_registers.SYNCH1;
-    *GS_REG_SRFSH = privileged_registers.SRFSH;
+    *GS_REG_SYNCHV = register_buffer.SYNCV;
+    *GS_REG_SYNCH2 = register_buffer.SYNCH2;
+    *GS_REG_SYNCH1 = register_buffer.SYNCH1;
+    *GS_REG_SRFSH = register_buffer.SRFSH;
 
-    *GS_REG_SMODE2 = privileged_registers.SMODE2;
-    *GS_REG_PMODE = privileged_registers.PMODE;
-    *GS_REG_SMODE1 = privileged_registers.SMODE1;
+    *GS_REG_SMODE2 = register_buffer.SMODE2;
+    *GS_REG_PMODE = register_buffer.PMODE;
+    *GS_REG_SMODE1 = register_buffer.SMODE1;
   }
 
-	*GS_REG_BGCOLOR = privileged_registers.BGCOLOR;
-	*GS_REG_EXTWRITE = privileged_registers.EXTWRITE;
-	*GS_REG_EXTDATA = privileged_registers.EXTDATA;
-	*GS_REG_EXTBUF = privileged_registers.EXTBUF;
-	*GS_REG_DISPFB1 = privileged_registers.DISP[0].DISPFB;
-	*GS_REG_DISPLAY1 = privileged_registers.DISP[0].DISPLAY;
-	*GS_REG_DISPFB2 = privileged_registers.DISP[1].DISPFB;
-	*GS_REG_DISPLAY2 = privileged_registers.DISP[1].DISPLAY;
+	*GS_REG_BGCOLOR = register_buffer.BGCOLOR;
+	*GS_REG_EXTWRITE = register_buffer.EXTWRITE;
+	*GS_REG_EXTDATA = register_buffer.EXTDATA;
+	*GS_REG_EXTBUF = register_buffer.EXTBUF;
+  // register_buffer.DISP[0].DISPFB = (register_buffer.DISP[0].DISPFB & ~0x1FF) | (0x70 - (register_buffer.DISP[0].DISPFB & 0x1FF));
+  // register_buffer.DISP[1].DISPFB = (register_buffer.DISP[1].DISPFB & ~0x1FF) | (0x70 - (register_buffer.DISP[0].DISPFB & 0x1FF));
+  PRINTF("SET DISPFB %08llx %08llx %08llx %08llx\n", register_buffer.DISP[0].DISPFB, register_buffer.DISP[0].DISPLAY, register_buffer.DISP[1].DISPFB, register_buffer.DISP[1].DISPLAY);
+	*GS_REG_DISPFB1 = register_buffer.DISP[0].DISPFB;
+	*GS_REG_DISPLAY1 = register_buffer.DISP[0].DISPLAY;
+	*GS_REG_DISPFB2 = register_buffer.DISP[1].DISPFB;
+	*GS_REG_DISPLAY2 = register_buffer.DISP[1].DISPLAY;
 
-  *GS_REG_CSR = privileged_registers.CSR;
-  *GS_REG_IMR = privileged_registers.IMR;
+  // Is the CSR write necessary?
+  *GS_REG_CSR = register_buffer.CSR;
+  *GS_REG_IMR = register_buffer.IMR;
   
 	return;
 }
@@ -191,7 +194,7 @@ void gs_set_privileged(const u8* data, u32 init)
 
 void gs_set_state(u8* data_ptr, u32 version)
 {
-	printf("State version %d\n", version);
+	PRINTF("State version %d\n", version);
 
 	qword_t* reg_packet = aligned_alloc(64, sizeof(qword_t) * 200);
 	qword_t* q = reg_packet;
@@ -345,6 +348,8 @@ void gs_set_state(u8* data_ptr, u32 version)
 
 const u8* read_gs_dump_header(const u8* data)
 {
+  memset(&dump.header, 0, sizeof(dump.header));
+
 	u32 crc;
 	data = my_read32(data, &crc);
 	if (crc == 0xFFFFFFFF)
@@ -363,7 +368,6 @@ const u8* read_gs_dump_header(const u8* data)
 	}
 	else
 	{
-		memset(&dump.header, 0, sizeof(dump.header));
 		dump.header.old = 1;
 		data = my_read32(data, &dump.header.state_size);
 		data = my_read32(data, &dump.header.state_version);
@@ -372,77 +376,122 @@ const u8* read_gs_dump_header(const u8* data)
   return data;
 }
 
-void read_gs_dump(const u8* data, const u8* const data_end)
+// TODO: Move this to the dump struct
+const u8* vsync_pos[1024];
+const u8* reg_pos[1024];
+u32 initial_reg_pos;
+u32 vsync_init = 0;
+u32 n_vsync = 0;
+
+void read_gs_dump(const u8* data, const u8* const data_end, u32 loops)
 {
-  u8* data_start = (u8*)data;
+  const u8* const data_start = (const u8*)data;
 
-  data = read_gs_dump_header(data);
-  printf("%08x: Header\n", data - data_start);
+  memset(&dump, 0, sizeof(dump));
 
-  // Skip over the header data
-  data += dump.header.serial_size;
-  data += dump.header.screenshot_size;
-
-  if (!dump.header.old)
-    data += sizeof(dump.header.state_version); // Skip state version
-
-  u32 state_size = dump.header.state_size - 4;
-  data = my_read_ptr(data, (const void**)&dump.state, state_size);
-  printf("%08x: State\n", data - data_start);
-  gs_set_state(dump.state, dump.header.state_version);
-
-  data = my_read_ptr(data, (const void**)&dump.registers, REGISTERS_SIZE);
-  printf("%08x: Registers\n", data - data_start);
-  gs_set_privileged(dump.registers, 1);
-
-  gs_dump_command_t* curr_command = dump.commands;
-  
-  while (data < data_end)
+  while (loops != 0)
   {
-    memset(curr_command, 0, sizeof(gs_dump_command_t));
+    dma_channel_initialize(DMA_CHANNEL_GIF,NULL,0);
+    dma_channel_fast_waits(DMA_CHANNEL_GIF);
 
-    data = my_read8(data, &curr_command->tag);
-    printf("%08x: Tag %d\n", data - data_start, curr_command->tag);
-    switch (curr_command->tag)
+    loops--;
+
+    data = data_start;
+    data = read_gs_dump_header(data);
+    PRINTF("%08x: Header\n", data - data_start);
+
+    // Skip over the header data
+    data += dump.header.serial_size;
+    data += dump.header.screenshot_size;
+
+    PRINTF("old: %d, state_version: %d, state_size: %d, serial_offset: %d, serial_size: %d, crc: %d, screenshot_width: %d, screenshot_height: %d, screenshot_offset: %d, screenshot_size: %d\n", dump.header.old, dump.header.state_version, dump.header.state_size, dump.header.serial_offset, dump.header.serial_size, dump.header.crc, dump.header.screenshot_width, dump.header.screenshot_height, dump.header.screenshot_offset, dump.header.screenshot_size);
+
+    if (!dump.header.old)
+      data += sizeof(dump.header.state_version); // Skip state version
+
+    u32 state_size = dump.header.state_size - 4;
+    data = my_read_ptr(data, (const void**)&dump.state, state_size);
+    PRINTF("%08x: State\n", data - data_start);
+    gs_set_state(dump.state, dump.header.state_version);
+
+    data = my_read_ptr(data, (const void**)&dump.registers, REGISTERS_SIZE);
+    PRINTF("%08x: Registers\n", data - data_start);
+    gs_set_privileged(dump.registers, 1);
+    
+    if (vsync_init && n_vsync > 0)
     {
-      case GS_DUMP_TRANSFER:
+      PRINTF("%08x: Registers\n", reg_pos[0] - data_start);
+      gs_set_privileged(reg_pos[0], 0);
+    }
+    
+    gs_dump_command_t* curr_command = malloc(sizeof(gs_dump_command_t));
+  
+    int vsync = 0;
+    while (data < data_end)
+    {
+      memset(curr_command, 0, sizeof(gs_dump_command_t));
+
+      data = my_read8(data, &curr_command->tag);
+      PRINTF("%08x: Tag %d\n", data - data_start, curr_command->tag);
+
+      switch (curr_command->tag)
       {
-        data = my_read8(data, &curr_command->path);
-        data = my_read32(data, &curr_command->size);
-        data = my_read_ptr(data, (const void**)&curr_command->data, curr_command->size);
+        case GS_DUMP_TRANSFER:
+        {
+          data = my_read8(data, &curr_command->path);
+          data = my_read32(data, &curr_command->size);
+          data = my_read_ptr(data, (const void**)&curr_command->data, curr_command->size);
 
-        printf("%08x: Transfer %d %d\n", data - data_start, curr_command->path, curr_command->size);
-        
-        gs_transfer((u8*)curr_command->data, curr_command->size);
-        break;
-      }
-      case GS_DUMP_VSYNC:
-      {
-        data = my_read8(data, &curr_command->field);
+          PRINTF("%08x: Transfer %d %d\n", data - data_start, curr_command->path, curr_command->size);
+          
+          gs_transfer((u8*)curr_command->data, curr_command->size);
+          break;
+        }
+        case GS_DUMP_VSYNC:
+        {
+          if (vsync_init == 0)
+            vsync_pos[n_vsync++] = data;
+          vsync++;
 
-        printf("%08x: Vsync %d\n", data - data_start, curr_command->field);
+          data = my_read8(data, &curr_command->field);
 
-        draw_wait_finish();
-        graph_wait_vsync();
-        break;
-      }
-      case GS_DUMP_FIFO:
-      {
-        data = my_read32(data, &curr_command->size);
+          graph_wait_vsync();
+          
+          PRINTF("%08x: Vsync %d\n", data - data_start, curr_command->field);
 
-        printf("%08x: Fifo %d\n", data - data_start, curr_command->size);
-        break;
-      }
-      case GS_DUMP_REGISTERS:
-      {
-        data = my_read_ptr(data, (const void**)&curr_command->data, 8192);
+          if (vsync_init && vsync < n_vsync)
+          {
+            PRINTF("%08x: Post Vsync Registers\n", reg_pos[vsync] - data_start);
+            gs_set_privileged(reg_pos[vsync], 0);
+          }
+          break;
+        }
+        case GS_DUMP_FIFO:
+        {
+          data = my_read32(data, &curr_command->size);
 
-        gs_set_privileged(curr_command->data, 0);
+          PRINTF("%08x: Fifo %d\n", data - data_start, curr_command->size);
+          break;
+        }
+        case GS_DUMP_REGISTERS:
+        {
+          // TOOO: MUST CHECK IF THIS IS REALLY JUST BEFORE A VSYNC!
+          if (vsync_init == 0)
+            reg_pos[n_vsync] = data;
 
-        printf("%08x: Registers\n", data - data_start);
-        break;
+          data = my_read_ptr(data, (const void**)&curr_command->data, 8192);
+          
+          PRINTF("%08x: Registers\n", data - data_start);
+          gs_set_privileged(curr_command->data, 0);
+
+          break;
+        }
       }
     }
+
+    free(curr_command);
+
+    vsync_init = 1;
   }
 }
 
@@ -451,10 +500,7 @@ extern u8 pcsx2_dump[] __attribute__((aligned(16)));
 
 int main(int argc, char* argv[])
 {
-  dma_channel_initialize(DMA_CHANNEL_GIF,NULL,0);
-	dma_channel_fast_waits(DMA_CHANNEL_GIF);
+  read_gs_dump(pcsx2_dump, pcsx2_dump + size_pcsx2_dump, 10);
 
-
-  read_gs_dump(pcsx2_dump, pcsx2_dump + size_pcsx2_dump);
   return 0;
 }
