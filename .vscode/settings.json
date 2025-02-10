@@ -27,6 +27,7 @@
     "array": "c",
     "string": "c",
     "string_view": "c",
-    "assert.h": "c"
+    "assert.h": "c",
+    "stdio.h": "c"
   }
 }

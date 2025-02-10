@@ -10,7 +10,7 @@ include ../Makefile.destdir
 
 EE_LIBS = -ldraw -lgraph -lmath3d -lpacket -ldma
 
-all: huge-st-2.elf
+all: frame.elf
 
 %.elf: %.o
 	$(DIR_GUARD)
@@ -20,11 +20,11 @@ ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
 
-huge-st-2.o: huge-st-2-template.c
+frame.o: frame-template.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -DHUGE_ST=0 -c $< -o $@
 
 clean:
-	rm -f huge-st-2.elf huge-st-2.o
+	rm -f frame.elf frame.o
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
