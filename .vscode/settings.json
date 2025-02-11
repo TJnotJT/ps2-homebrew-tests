@@ -28,6 +28,9 @@
     "string": "c",
     "string_view": "c",
     "assert.h": "c",
-    "stdio.h": "c"
+    "stdio.h": "c",
+    "my_read.h": "c",
+    "string.h": "c",
+    "sysclib.h": "c"
   }
 }

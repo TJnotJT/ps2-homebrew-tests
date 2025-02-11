@@ -1,3 +1,4 @@
+#include <string.h>
 #include "my_read.h"
 
 const u8* my_read8(const u8* data, u8* value)
@@ -53,9 +54,8 @@ const u8* my_readf64(const u8* data, double* value)
 
 const u8* my_read(const u8* data, u8 *value, u32 size)
 {
-  for (u32 i = 0; i < size; i++)
-    data = my_read8(data, value + i);
-  return data;
+  memcpy(value, data, size);
+  return data + size;
 }
 
 const u8* my_read_ptr(const u8* data, const void** value, u32 size)

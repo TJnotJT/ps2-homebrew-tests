@@ -16,7 +16,7 @@ all: runner.elf
 runner.elf: my_read.o pcsx2_dump.o main.o 
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
-	$(EE_STRIP) --strip-all $@
+	# $(EE_STRIP) --strip-all $@
 ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif

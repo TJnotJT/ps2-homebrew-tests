@@ -47,7 +47,8 @@ typedef struct {
 
 gs_dump_t dump __attribute__((aligned(16))); // For storing the GS dump
 qword_t transfer_buffer[TRANSFER_SIZE] __attribute__((aligned(16))); // For transferring GS packets with qword alignment
-gs_registers register_buffer __attribute__((aligned(16))); // For transferring GS privileged registers with qword alignment
+gs_registers_t register_buffer __attribute__((aligned(16))); // For transferring GS privileged registers with qword alignment
+u8 gs_dump_state[0x401000] __attribute__((aligned(16)));
 
 extern GRAPH_MODE graph_mode[22]; // For inferring the video mode
 extern u64 smode1_values[22]; // For inferring the video mode
@@ -121,7 +122,7 @@ int graph_set_mode_custom(int interlace, int mode, int ffmd)
 
 void gs_set_privileged(const u8* data, u32 init)
 {
-  memcpy(&register_buffer, data, sizeof(gs_registers));
+  memcpy(&register_buffer, data, sizeof(gs_registers_t));
 
   if (init)
   {
@@ -179,10 +180,7 @@ void gs_set_state(u8* data_ptr, u32 version)
 	qword_t* reg_packet = aligned_alloc(64, sizeof(qword_t) * 200);
 	qword_t* q = reg_packet;
 
-	PACK_GIFTAG(q, GIF_SET_TAG(3, 0, GIF_PRE_DISABLE, 0, GIF_FLG_PACKED, 13),
-		GIF_REG_AD | (GIF_REG_AD << 4) | (GIF_REG_AD << 8) | (GIF_REG_AD << 12) | (GIF_REG_AD << 16) |
-			(GIF_REG_AD << 20) | (GIF_REG_AD << 24) | ((u64)GIF_REG_AD << 28) | ((u64)GIF_REG_AD << 32) |
-			((u64)GIF_REG_AD << 36) | ((u64)GIF_REG_AD << 40) | ((u64)GIF_REG_AD << 44) | ((u64)GIF_REG_AD << 48));
+	PACK_GIFTAG(q, GIF_SET_TAG(39, 0, GIF_PRE_DISABLE, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
 
 	q++;
 	SET_GS_REG(GS_REG_PRIM);
@@ -198,7 +196,7 @@ void gs_set_state(u8* data_ptr, u32 version)
 	SET_GS_REG(GS_REG_DIMX);
 	SET_GS_REG(GS_REG_DTHE);
 	SET_GS_REG(GS_REG_COLCLAMP);
-	;
+	
 	SET_GS_REG(GS_REG_PABE);
 	SET_GS_REG(GS_REG_BITBLTBUF);
 	SET_GS_REG(GS_REG_TRXDIR);
@@ -393,10 +391,19 @@ void read_gs_dump(const u8* data, const u8* const data_end, u32 loops)
     if (!dump.header.old)
       data += sizeof(dump.header.state_version); // Skip state version
 
-    u32 state_size = dump.header.state_size - 4;
-    data = my_read_ptr(data, (const void**)&dump.state, state_size);
+    const u32 state_size = dump.header.state_size - 4;
+
+		if (!vsync_init)
+		{
+			data = my_read(data, gs_dump_state, state_size);
+		}
+		else
+		{
+			data += state_size;
+		}
+		
     PRINTF("%08x: State\n", data - data_start);
-    gs_set_state(dump.state, dump.header.state_version);
+    gs_set_state(gs_dump_state, dump.header.state_version);
     
 		data = my_read_ptr(data, (const void**)&dump.registers, REGISTERS_SIZE);
     if (vsync_init && n_vsync > 0)

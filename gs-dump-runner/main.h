@@ -5,6 +5,7 @@
 
 #define REGISTERS_SIZE 8192
 #define COMMAND_BUFFER_SIZE 8192
+#define STATE_SIZE 0x401000
 
 typedef struct
 {
@@ -20,7 +21,7 @@ typedef struct
   u32 screenshot_size;
 } gs_dump_header_t;
 
-typedef enum : u8
+typedef enum
 {
   GS_DUMP_TRANSFER = 0,
   GS_DUMP_VSYNC = 1,
@@ -45,11 +46,13 @@ typedef struct
 typedef struct
 {
 	gs_dump_header_t header;
-  u8* state;
+  
   u8* registers;
   gs_dump_command_t commands[COMMAND_BUFFER_SIZE];
   u32 command_count;
 } gs_dump_t;
+
+extern u8 gs_dump_state[0x401000] __attribute((aligned(16)));
 
 typedef struct
 {
@@ -109,6 +112,6 @@ typedef struct
 
 		u8 _pad17[0x1000];
 	};
-} gs_registers;
+} gs_registers_t;
 
 #endif
