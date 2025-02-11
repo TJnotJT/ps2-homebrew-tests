@@ -1,4 +1,3 @@
-
 #include <kernel.h>
 #include <stdlib.h>
 #include <malloc.h>
@@ -14,7 +13,7 @@
 #include <dma.h>
 #include <draw.h>
 
-#include "gs_dump.h"
+#include "main.h"
 #include "my_read.h"
 #include "swizzle.h"
 
