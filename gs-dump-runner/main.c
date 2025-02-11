@@ -57,27 +57,20 @@ void gs_transfer(u8* packet, u32 size)
 {
   assert(size % 16 == 0);
 
-	volatile u32* GIFCHCR = ((volatile u32*)0x1000A000);
-	volatile u32* GIFMADR = ((volatile u32*)0x1000A010);
-	volatile u32* GIFQWC = ((volatile u32*)0x1000A020);
-
-	u32 transfer_cnt = size / 16;
-	do
+	u32 total_qwc = size / 16;
+	while (total_qwc > 0)
 	{
-    u32 transfer = transfer_cnt < TRANSFER_SIZE ? transfer_cnt : TRANSFER_SIZE;
-    memcpy(transfer_buffer, packet, transfer * sizeof(qword_t));
+    u32 transfer_qwc = total_qwc < TRANSFER_SIZE ? total_qwc : TRANSFER_SIZE;
+    memcpy(transfer_buffer, packet, transfer_qwc * sizeof(qword_t));
 
-    // TODO: Replace with dma_channel_send_normal ?
-	  *GIFMADR = (u32)transfer_buffer;
-		*GIFQWC = transfer;
-		transfer_cnt -= transfer;
-		FlushCache(0);
-		*GIFCHCR = 0x100;
-		while (*GIFCHCR & 0x100)
-		{
-		}
+		FlushCache(0); // Flush cache since we copied data to the transfer buffer
 
-	} while (transfer_cnt > 0);
+		dma_channel_send_normal(DMA_CHANNEL_GIF, transfer_buffer, transfer_qwc, 0, 0);
+		dma_channel_wait(DMA_CHANNEL_GIF, 0);
+
+		total_qwc -= transfer_qwc;
+		packet += transfer_qwc * sizeof(qword_t);
+	}
 	return;
 }
 
@@ -105,6 +98,7 @@ int graph_get_mode_from_smode1(u64 smode1)
 	return -1;
 }
 
+// Copied from PS2SDK source and modified
 int graph_set_mode_custom(int interlace, int mode, int ffmd)
 {
 	// Reset GS.
@@ -360,13 +354,6 @@ const u8* reg_pos[1024];
 u32 initial_reg_pos;
 u32 vsync_init = 0;
 u32 n_vsync = 0;
-
-int vsync_handler()
-{
-	// PRINTF("Vsync handler\n");
-	ExitHandler();
-	return 0;
-}
 
 void read_gs_dump(const u8* data, const u8* const data_end, u32 loops)
 {
