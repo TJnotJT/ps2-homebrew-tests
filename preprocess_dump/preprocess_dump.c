@@ -1,10 +1,14 @@
 #include "common.h"
 #include "swizzle.h"
 
-u8 command_data[0x10000000]; // Processed GS dump data for GS_DUMP_REGISTERS and GS_DUMP_TRANSFER
-u32 command_data_curr = 0; // Points to next byte to be read
+u8 dump[0x10000000]; // Raw GS dump data
+u32 dump_size;
+u32 dump_curr = 0; // Points to next byte to be read
 
-u32 crc;
+
+u32 crc; // CRC of the GS dump
+
+// GS Dump header
 u32 header_size;
 u32 header_old;
 u32 header_state_version;
@@ -17,20 +21,24 @@ u32 header_screenshot_height;
 u32 header_screenshot_offset;
 u32 header_screenshot_size;
 
-u8 dump[0x10000000]; // Raw GS dump data
-u32 dump_size;
-u32 dump_curr = 0; // Points to next byte to be read
-
 priv_regs_out_t priv_regs_init; // Initial GS privileged registers
 
-// u8 general_regs_init[0x1000] __attribute__((aligned(16))); // Context registers for the GS
-general_regs_t general_regs_init __attribute__((aligned(16))); // Context registers for the GS
+general_regs_t general_regs_init __attribute__((aligned(16))); // Initial GS general registers
 u32 general_regs_init_size;
 
-u8 memory[0x400000]; // Memory for the GS
+u8 memory_init[0x400000]; // Initial memory for the GS
 
 command_t commands[0x100000]; // Processed GS dump commands
 u32 command_count = 0;
+
+// The VSYNC and REGISTER commands should be paired one-to-one
+// The REGISTER command should come right before the VSYNC command
+u32 vsync_pos[0x1000]; // Positions of GS_DUMP_VSYNC commands in commands
+u32 vsync_reg_pos[0x1000]; // Positions of GS_DUMP_REGISTERS commands in commands
+u32 vsync_count = 0;
+
+u8 command_data[0x10000000]; // Processed GS dump data for GS_DUMP_REGISTERS and GS_DUMP_TRANSFER
+u32 command_data_curr = 0; // Points to next byte to be read
 
 FILE* debug_file = 0;
 
@@ -197,7 +205,7 @@ void read_memory()
 {
   u8 temp_memory[GS_MEMORY_SIZE] __attribute__((aligned(16)));
   read(temp_memory, GS_MEMORY_SIZE);
-  deswizzleImage(memory, temp_memory, 1024 / 64, 1024 / 32);
+  deswizzleImage(memory_init, temp_memory, 1024 / 64, 1024 / 32);
 }
 
 void read_priv_regs(priv_regs_out_t* priv_regs)
@@ -247,7 +255,7 @@ int main(int argc, char* argv[])
 
   debug_printf("Opened file\n");
 
-  // Read all data into memory
+  // Read all data into the dump buffer
   fseek(file, 0, SEEK_END);
   dump_size = ftell(file);
   fseek(file, 0, SEEK_SET);
@@ -284,6 +292,8 @@ int main(int argc, char* argv[])
 
   debug_printf("%08x: Registers\n", dump_curr);
 
+  u32 prev_tag = GS_DUMP_UNKNOWN;
+
   while (dump_curr < dump_size)
   {
     command_t* curr_command = &commands[command_count];
@@ -306,6 +316,8 @@ int main(int argc, char* argv[])
       }
       case GS_DUMP_VSYNC:
       {
+        assert(prev_tag == GS_DUMP_REGISTERS);
+        vsync_pos[vsync_count++] = command_count;
         curr_command->field = read_u8();
 
         debug_printf("%08x: Vsync %d\n", dump_curr, curr_command->field);
@@ -320,6 +332,8 @@ int main(int argc, char* argv[])
       }
       case GS_DUMP_REGISTERS:
       {
+        vsync_reg_pos[vsync_count] = command_count;
+
         align(&command_data_curr, 16);
         curr_command->command_data_offset = command_data_curr;
         read_priv_regs((priv_regs_out_t*)&command_data[command_data_curr]);
@@ -343,6 +357,7 @@ int main(int argc, char* argv[])
       }
     }
 
+    prev_tag = curr_command->tag;
     command_count++;
   }
 
@@ -427,12 +442,12 @@ int main(int argc, char* argv[])
   fprintf(data_file, "};\n\n");
 
   // Write the memory
-  fprintf(data_file, " u8 memory[0x%x] __attribute__((aligned(16))) = {\n", GS_MEMORY_SIZE);
+  fprintf(data_file, " u8 memory_init[0x%x] __attribute__((aligned(16))) = {\n", GS_MEMORY_SIZE);
   for (u32 i = 0; i < GS_MEMORY_SIZE; i++)
   {
     if (i % 16 == 0)
       fprintf(data_file, "  ");
-    fprintf(data_file, "0x%02x, ", memory[i]);
+    fprintf(data_file, "0x%02x, ", memory_init[i]);
     if (i % 16 == 15)
       fprintf(data_file, "\n");
   }
@@ -446,6 +461,19 @@ int main(int argc, char* argv[])
     command_t* curr_command = &commands[i];
     fprintf(data_file, "  { %d, {%d}, %d, %d },\n", curr_command->tag, curr_command->path, curr_command->size, curr_command->command_data_offset);
   }
+  fprintf(data_file, "};\n\n");
+
+  // Write the VSYNC and REGISTER positions
+  fprintf(data_file, "u32 vsync_count = %d;\n\n", vsync_count);
+
+  fprintf(data_file, "u32 vsync_pos[%d] = {\n", vsync_count);
+  for (u32 i = 0; i < vsync_count; i++)
+    fprintf(data_file, "  %d,\n", vsync_pos[i]);
+  fprintf(data_file, "};\n\n");
+
+  fprintf(data_file, "u32 vsync_reg_pos[%d] = {\n", vsync_count);
+  for (u32 i = 0; i < vsync_count; i++)
+    fprintf(data_file, "  %d,\n", vsync_reg_pos[i]);
   fprintf(data_file, "};\n\n");
 
   // Write the command data
@@ -470,9 +498,12 @@ int main(int argc, char* argv[])
   fprintf(var_file, "extern priv_regs_out_t priv_regs_init __attribute__((aligned(16)));\n");
   fprintf(var_file, "extern u32 general_regs_init_size;\n");
   fprintf(var_file, "extern general_regs_t general_regs_init __attribute__((aligned(16)));\n");
-  fprintf(var_file, "extern u8 memory[0x%x] __attribute__((aligned(16)));\n", GS_MEMORY_SIZE);
+  fprintf(var_file, "extern u8 memory_init[0x%x] __attribute__((aligned(16)));\n", GS_MEMORY_SIZE);
   fprintf(var_file, "extern u32 command_count;\n");
   fprintf(var_file, "extern command_t commands[%d] __attribute__((aligned(16)));\n", command_count);
+  fprintf(var_file, "extern u32 vsync_count;\n");
+  fprintf(var_file, "extern u32 vsync_pos[%d];\n", vsync_count);
+  fprintf(var_file, "extern u32 vsync_reg_pos[%d];\n", vsync_count);
   fprintf(var_file, "extern u8 command_data[%d] __attribute__((aligned(16)));\n", command_data_curr);
   fclose(var_file);
 

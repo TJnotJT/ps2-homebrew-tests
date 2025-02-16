@@ -15,7 +15,8 @@
 
 #include "common.h"
 
-#define TRANSFER_SIZE 0x10000
+#define TRANSFER_SIZE 0xFFFF
+
 #define PRINTF(fmt, ...) printf(fmt, ##__VA_ARGS__)
 // #define PRINTF(fmt, ...)
 
@@ -70,17 +71,16 @@ int graph_get_mode_from_smode1(u64 smode1)
 int graph_set_mode_custom(int interlace, int mode, int ffmd)
 {
   // Reset GS.
-  *GS_REG_CSR = (u64)1<<9;
+  *GS_REG_CSR = (u64)(1 << 9);
 
   // Clear GS CSR.
-  *GS_REG_CSR = GS_SET_CSR(0,0,0,0,0,0,0,0,0,0,0,0);
+  *GS_REG_CSR = GS_SET_CSR(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
   // Unmask GS VSYNC Interrupt.
   GsPutIMR(0x00007700);
 
   // Ensure registers are written prior to setting another mode.
-  asm volatile ("sync.p\n\t"
-          "nop\n\t");
+  asm volatile ("sync.p\n\t" "nop\n\t");
 
   // Set the requested mode.
   SetGsCrt(interlace, graph_mode[mode].mode, ffmd);
@@ -168,7 +168,6 @@ void gs_set_memory(u8* data)
   free(vram_packet);
 }
 
-// TODO: MAKE SURE TO CALL AFTER MEMORY!
 void gs_set_general_regs(general_regs_t* data)
 {
   assert((u32)data % 16 == 0);
@@ -193,8 +192,7 @@ void gs_set_general_regs(general_regs_t* data)
   PACK_GIFTAG(q, data->TRXREG_1, GS_REG_TRXREG); q++;
   PACK_GIFTAG(q, data->TRXREG_2, GS_REG_TRXREG); q++;
   PACK_GIFTAG(q, data->XYOFFSET_1, GS_REG_XYOFFSET_1); q++;
-  // *(u64*)data |= 1; // Reload clut SAVE THIS FOR LATER
-  PACK_GIFTAG(q, data->TEX0_1, GS_REG_TEX0_1); q++;
+  PACK_GIFTAG(q, ((u64)1 << 61) | (data->TEX0_1 & (((u64)1 << 61) - 1)), GS_REG_TEX0_1); q++; // Set CLD bit 61 to reload the clut
   PACK_GIFTAG(q, data->TEX1_1, GS_REG_TEX1_1); q++;
   PACK_GIFTAG(q, data->CLAMP_1, GS_REG_CLAMP_1); q++;
   PACK_GIFTAG(q, data->MIPTBP1_1, GS_REG_MIPTBP1_1); q++;
@@ -206,8 +204,7 @@ void gs_set_general_regs(general_regs_t* data)
   PACK_GIFTAG(q, data->FRAME_1, GS_REG_FRAME_1); q++;
   PACK_GIFTAG(q, data->ZBUF_1, GS_REG_ZBUF_1); q++;
   PACK_GIFTAG(q, data->XYOFFSET_2, GS_REG_XYOFFSET_2); q++;
-  // *(u64*)data |= 1; // Reload clut SAVE THIS FOR LATER
-  PACK_GIFTAG(q, data->TEX0_2, GS_REG_TEX0_2); q++;
+  PACK_GIFTAG(q, ((u64)1 << 61) | (data->TEX0_2 & (((u64)1 << 61) - 1)), GS_REG_TEX0_2); q++; // Set CLD bit 61 to reload the clut
   PACK_GIFTAG(q, data->TEX1_2, GS_REG_TEX1_2); q++;
   PACK_GIFTAG(q, data->CLAMP_2, GS_REG_CLAMP_2); q++;
   PACK_GIFTAG(q, data->MIPTBP1_2, GS_REG_MIPTBP1_2); q++;
@@ -231,105 +228,96 @@ void gs_set_general_regs(general_regs_t* data)
   free(reg_packet);
 }
 
-// TODO: Move this to the dump struct
-const u8* vsync_pos[1024];
-u8 vsync_field[1024];
-const u8* reg_pos[1024];
-u32 initial_reg_pos;
-u32 vsync_init = 0;
-u32 n_vsync = 0;
+void wait_for_vsync_field(u32 field)
+{
+  int timeout = 0;
+  while (((*GS_REG_CSR >> 13) & 1) != field)
+  {
+    if (timeout % 1000000 == 0)
+      PRINTF("Waiting for correct field %d\n", field);
+    timeout++;
+  }
+  if (timeout > 0)
+  {
+    PRINTF("Field timeout: %d\n", timeout);
+  }
+}
+
 
 void exec_gs_dump(s32 loops)
 {
+  PRINTF("Executing GS dump\n");
+
   if (loops < 0)
     loops = 0x7FFFFFFF;
 
-  while (loops != 0)
+  while (loops-- != 0)
   {
+    PRINTF("Loop %d\n", loops);
+    
     dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
     dma_channel_fast_waits(DMA_CHANNEL_GIF);
 
-    loops--;
-
-    gs_set_memory(memory);
+    gs_set_memory(memory_init);
     gs_set_general_regs(&general_regs_init);
     gs_set_priv_regs(&priv_regs_init, 1);
 
-  
-    int vsync = 0;
-    for (u32 i = 0; i < command_count; i++)
-    {
-      // Wait for correct field
-      // if (vsync_init && vsync < n_vsync)
-      // {
-      //   int timeout = 0;
-      //   while (((*GS_REG_CSR >> 13) & 1) != vsync_field[vsync])
-      //   {
-      //     if (timeout % 1000000 == 0)
-      //       PRINTF("Waiting for correct field %d\n", vsync_field[vsync]);
-      //     timeout++;
-      //   }
-      //   if (timeout > 0)
-      //   {
-      //     PRINTF("Field timeout: %d\n", timeout);
+    u32 vsync_n = 0;
 
-      //     if (vsync_init && vsync < n_vsync)
-      //     {
-      //       PRINTF("%08x: Vsync Registers\n", reg_pos[vsync] - data_start);
-      //       gs_set_privileged(reg_pos[vsync], 0);
-      //     }
-      //   }
-      // }
-      command_t* curr_command = &commands[i];
+    // Set the register for the first Vsync
+    if (vsync_count > 0)
+    {
+      gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[0]].command_data_offset], 0);
+    }
+  
+    // Execute the commands
+    for (u32 command_n = 0; command_n < command_count; command_n++)
+    {
+      wait_for_vsync_field(commands[vsync_pos[vsync_n]].field);
+      
+      command_t* curr_command = &commands[command_n];
 
       switch (curr_command->tag)
       {
         case GS_DUMP_TRANSFER:
         {
-          // if (vsync_init)
-          // {
           gs_transfer(&command_data[curr_command->command_data_offset], curr_command->size);
-          // }
+
           break;
         }
         case GS_DUMP_VSYNC:
         {
           
-          // if (!vsync_init)
-          // {
-          //   vsync_field[n_vsync] = curr_command->field;
-          //   vsync_pos[n_vsync++] = data;
-          // }
-          // vsync++;
+          PRINTF("%05d: %d: Vsync: Expected field: %d, Actual field %lld\n",
+            command_n, vsync_n, curr_command->field, (*GS_REG_CSR >> 13) & 1);
 
-          PRINTF("%05d: Vsync %d\n", i, curr_command->field);
+          graph_wait_vsync();
+          
+          vsync_n++;
 
-          // graph_wait_vsync();
+          // Set the registers for the next Vsync
+          if (vsync_n < vsync_count)
+            gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[vsync_n]].command_data_offset], 0);
+
           break;
         }
         case GS_DUMP_FIFO:
         {
-          PRINTF("%05d: Fifo %d\n", i, curr_command->size);
+          PRINTF("%05d: Fifo %d\n", command_n, curr_command->size);
+
           break;
         }
         case GS_DUMP_REGISTERS:
         {
-          // if (!vsync_init)
-          // {
-          //   reg_pos[n_vsync] = data;
-          // }
+          PRINTF("%05d: Registers\n", command_n);
 
-          // if (!vsync_init)
-          // {
-          PRINTF("%05d: Registers\n", i);
-          gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0);
-          // }
+          // Don't set the registers here because they are set in the VSYNC command
+          // gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0);
 
           break;
         }
       }
     }
-    // vsync_init = 1;
   }
 }
 
