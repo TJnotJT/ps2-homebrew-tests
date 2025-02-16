@@ -15,10 +15,11 @@
 
 #include "common.h"
 
+// Maximum size of a DMA transfer
 #define TRANSFER_SIZE 0xFFFF
 
-#define PRINTF(fmt, ...) printf(fmt, ##__VA_ARGS__)
-// #define PRINTF(fmt, ...)
+// #define PRINTF(fmt, ...) printf(fmt, ##__VA_ARGS__)
+#define PRINTF(fmt, ...)
 
 #include "pcsx2_dump_vars.c"
 
@@ -254,7 +255,7 @@ void exec_gs_dump(s32 loops)
   while (loops-- != 0)
   {
     PRINTF("Loop %d\n", loops);
-    
+
     dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
     dma_channel_fast_waits(DMA_CHANNEL_GIF);
 
@@ -263,17 +264,19 @@ void exec_gs_dump(s32 loops)
     gs_set_priv_regs(&priv_regs_init, 1);
 
     u32 vsync_n = 0;
-
-    // Set the register for the first Vsync
-    if (vsync_count > 0)
-    {
-      gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[0]].command_data_offset], 0);
-    }
+    u32 vsync_need_regs = 1; // Do we need to set the privileged registers for the next Vsync?
   
     // Execute the commands
     for (u32 command_n = 0; command_n < command_count; command_n++)
     {
       wait_for_vsync_field(commands[vsync_pos[vsync_n]].field);
+
+      // Set the registers for the next Vsync
+      if (vsync_need_regs && vsync_n < vsync_count)
+      {
+        gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[vsync_n]].command_data_offset], 0);
+        vsync_need_regs = 0;
+      }
       
       command_t* curr_command = &commands[command_n];
 
@@ -285,33 +288,33 @@ void exec_gs_dump(s32 loops)
 
           break;
         }
+
         case GS_DUMP_VSYNC:
         {
           
           PRINTF("%05d: %d: Vsync: Expected field: %d, Actual field %lld\n",
             command_n, vsync_n, curr_command->field, (*GS_REG_CSR >> 13) & 1);
 
-          graph_wait_vsync();
-          
-          vsync_n++;
+          // graph_wait_vsync();
 
-          // Set the registers for the next Vsync
-          if (vsync_n < vsync_count)
-            gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[vsync_n]].command_data_offset], 0);
+          vsync_n++;
+          vsync_need_regs = 1;
 
           break;
         }
+
         case GS_DUMP_FIFO:
         {
           PRINTF("%05d: Fifo %d\n", command_n, curr_command->size);
 
           break;
         }
+
         case GS_DUMP_REGISTERS:
         {
           PRINTF("%05d: Registers\n", command_n);
 
-          // Don't set the registers here because they are set in the VSYNC command
+          // Don't set the registers here because they are set at the top of the loop
           // gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0);
 
           break;
