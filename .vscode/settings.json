@@ -31,6 +31,9 @@
     "stdio.h": "c",
     "my_read.h": "c",
     "string.h": "c",
-    "sysclib.h": "c"
+    "sysclib.h": "c",
+    "preprocess_dump.h": "c",
+    "common.h": "c",
+    "random": "c"
   }
 }
