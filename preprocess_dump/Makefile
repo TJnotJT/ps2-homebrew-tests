@@ -13,7 +13,7 @@ EE_LIBS = -ldraw -lgraph -lmath3d -lpacket -ldma
 
 all: runner.elf
 
-runner.elf: runner.o pcsx2_dump_data.o
+runner.elf: runner.o pcsx2_dump_data.o 
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	# $(EE_STRIP) --strip-all $@
@@ -21,17 +21,14 @@ ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
 
-runner.o: runner.c common.h
+runner.o: runner.c common.h pcsx2_dump_vars.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
 
-pcsx2_dump_data.o: preprocess
+pcsx2_dump_data.o: pcsx2_dump_data.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -c pcsx2_dump_data.c -o $@
 
-preprocess: preprocess_dump
+pcsx2_dump_data.c pcsx2_dump_vars.c: preprocess_dump pcsx2_dump.gs
 	./preprocess_dump pcsx2_dump.gs pcsx2_dump_data.c pcsx2_dump_vars.c
-
-preprocess_dump: preprocess_dump.c common.h pcsx2_dump.gs
-	gcc -o preprocess_dump preprocess_dump.c -std=c18 -Wall -Wextra -pedantic
 
 scratch.elf: scratch.c
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
