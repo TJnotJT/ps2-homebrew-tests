@@ -30,6 +30,9 @@ pcsx2_dump_data.o: pcsx2_dump_data.c
 pcsx2_dump_data.c pcsx2_dump_vars.c: preprocess_dump pcsx2_dump.gs
 	./preprocess_dump pcsx2_dump.gs pcsx2_dump_data.c pcsx2_dump_vars.c
 
+preprocess_dump: preprocess_dump.c
+	gcc $< -o $@
+
 scratch.elf: scratch.c
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 

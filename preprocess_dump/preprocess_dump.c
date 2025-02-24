@@ -5,7 +5,6 @@ u8 dump[0x10000000]; // Raw GS dump data
 u32 dump_size;
 u32 dump_curr = 0; // Points to next byte to be read
 
-
 u32 crc; // CRC of the GS dump
 
 // GS Dump header
