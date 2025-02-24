@@ -89,7 +89,9 @@ int graph_set_mode_custom(int interlace, int mode, int ffmd)
   return 0;
 }
 
-void gs_set_priv_regs(priv_regs_out_t* data, u32 init)
+u64 pmode_cached = 0;
+
+void gs_set_priv_regs(priv_regs_out_t* data, u32 init, u32 enable_output)
 {
   assert((u32)data % 16 == 0);
 
@@ -114,10 +116,21 @@ void gs_set_priv_regs(priv_regs_out_t* data, u32 init)
     // *GS_REG_SRFSH = data->SRFSH;
 
     *GS_REG_SMODE2 = data->SMODE2;
-    *GS_REG_PMODE = data->PMODE;
+
+    // *GS_REG_PMODE = pmode_cached;
+    pmode_cached = data->PMODE;
 
     // FIXME: Should this be set or enough to call graph_set_mode_custom?
     // *GS_REG_SMODE1 = register_buffer.SMODE1;
+  }
+
+  if (enable_output)
+  {
+    *GS_REG_PMODE = pmode_cached;
+  }
+  else
+  {
+    *GS_REG_PMODE = pmode_cached & ~3;
   }
 
   // CSR and IMR should not be set here
@@ -244,7 +257,6 @@ void wait_for_vsync_field(u32 field)
   }
 }
 
-
 void exec_gs_dump(s32 loops)
 {
   PRINTF("Executing GS dump\n");
@@ -261,22 +273,24 @@ void exec_gs_dump(s32 loops)
 
     gs_set_memory(memory_init);
     gs_set_general_regs(&general_regs_init);
-    gs_set_priv_regs(&priv_regs_init, 1);
+    gs_set_priv_regs(&priv_regs_init, 1, 0);
 
     u32 vsync_n = 0;
     u32 vsync_need_regs = 1; // Do we need to set the privileged registers for the next Vsync?
   
+    wait_for_vsync_field(commands[vsync_pos[0]].field);
+
     // Execute the commands
     for (u32 command_n = 0; command_n < command_count; command_n++)
     {
-      wait_for_vsync_field(commands[vsync_pos[vsync_n]].field);
+      // wait_for_vsync_field(commands[vsync_pos[vsync_n]].field);
 
       // Set the registers for the next Vsync
-      if (vsync_need_regs && vsync_n < vsync_count)
-      {
-        gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[vsync_n]].command_data_offset], 0);
-        vsync_need_regs = 0;
-      }
+      // if (vsync_need_regs && vsync_n < vsync_count)
+      // {
+      //   gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[vsync_n]].command_data_offset], 0);
+      //   vsync_need_regs = 0;
+      // }
       
       command_t* curr_command = &commands[command_n];
 
@@ -314,8 +328,12 @@ void exec_gs_dump(s32 loops)
         {
           PRINTF("%05d: Registers\n", command_n);
 
+          // Wait for Vsync before swapping buffers (which should be done by the privileged registers)
+          graph_wait_vsync();
           // Don't set the registers here because they are set at the top of the loop
-          // gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0);
+
+          u32 output = vsync_n < vsync_count - 1; // no output on the last Vsync
+          gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0, output);
 
           break;
         }
