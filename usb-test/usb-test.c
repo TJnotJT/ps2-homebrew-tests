@@ -170,9 +170,8 @@ void my_draw_clear(u32 rgb)
 
 int wait_usb_ready()
 {
-	int ret = -1;
 	int retries = 1000;
-	while (ret != 0 && retries > 0) {
+	while (retries > 0) {
 		if (mkdir("mass:tmp", 0777) == 0)
 		{
 			rmdir("mass:tmp");
@@ -181,7 +180,7 @@ int wait_usb_ready()
 		busy_wait(10 * 1000 * 1000);
 		retries--;
 	}
-	return ret;
+	return -1;
 }
 
 

@@ -1,0 +1,72 @@
+
+#include <kernel.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <tamtypes.h>
+#include <string.h>
+#include <loadfile.h>
+#include <iopcontrol.h>
+#include <sifrpc.h>
+#include <dirent.h> // mkdir()
+#include <unistd.h> // rmdir()
+#include <sbv_patches.h>
+
+#include "usb.h"
+
+extern unsigned int size_bdm_irx;
+extern unsigned int size_bdmfs_fatfs_irx;
+extern unsigned int size_usbd_irx;
+extern unsigned int size_usbmass_bd_irx;
+
+extern unsigned char bdm_irx[];
+extern unsigned char bdmfs_fatfs_irx[];
+extern unsigned char usbd_irx[];
+extern unsigned char usbmass_bd_irx[];
+
+void busy_wait(u32 loops) {
+	for (int i = 0; i < loops; i++)
+		__asm volatile ("nop");
+}
+
+int wait_usb_ready()
+{
+	int retries = 10;
+	while (retries > 0) {
+		if (mkdir("mass:tmp", 0777) == 0)
+		{
+			rmdir("mass:tmp");
+			return 0;
+		}
+		busy_wait(10 * 1000 * 1000);
+		retries--;
+	}
+	return -1;
+}
+
+void reset_iop()
+{
+	SifInitRpc(0);
+	// Reset IOP
+	while (!SifIopReset("", 0x0))
+		;
+	while (!SifIopSync())
+		;
+	SifInitRpc(0);
+
+	sbv_patch_enable_lmb();
+}
+
+void load_irx_usb()
+{
+	int bdm_irx_id = SifExecModuleBuffer(&bdm_irx, size_bdm_irx, 0, NULL, NULL);
+	printf("BDM ID: %d\n", bdm_irx_id);
+
+	int bdmfs_fatfs_irx_id = SifExecModuleBuffer(&bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, NULL);
+	printf("BDMFS FATFS ID: %d\n", bdmfs_fatfs_irx_id);
+
+	int usbd_irx_id = SifExecModuleBuffer(&usbd_irx, size_usbd_irx, 0, NULL, NULL);
+	printf("USBD ID is %d\n", usbd_irx_id);
+
+	int usbmass_irx_id = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
+	printf("USB Mass ID is %d\n", usbmass_irx_id);
+};

@@ -1,0 +1,1 @@
+int write_bmp(const char* filename, const unsigned char* pixelData, int width, int height, int bitsPerPixel);
