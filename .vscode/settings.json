@@ -34,6 +34,12 @@
     "sysclib.h": "c",
     "preprocess_dump.h": "c",
     "common.h": "c",
-    "random": "c"
+    "random": "c",
+    "iopcontrol.h": "c",
+    "dirent.h": "c",
+    "ioman.h": "c",
+    "sbv_patches.h": "c",
+    "unistd.h": "c",
+    "ee_regs.h": "c"
   }
 }
