@@ -31,19 +31,21 @@
 
 #define FRAME_WIDTH 1024
 #define FRAME_HEIGHT 256
-#define WINDOW_X (0)
-#define WINDOW_Y (0)
 
 framebuffer_t g_frame; // Frame buffer for even/odd lines
-zbuffer_t g_z; // Z buffer
+zbuffer_t g_z_enabled; // Z buffer
+zbuffer_t g_z_disabled; // Z buffer
 
-unsigned char z_data[3 * FRAME_HEIGHT * FRAME_WIDTH] __attribute__((aligned(64))); // For reading Z buffer back
+unsigned char z_data[4 * FRAME_HEIGHT * FRAME_WIDTH] __attribute__((aligned(64))); // For reading Z buffer back
 
 #define COLOR_READING_Z 0x00FF00
 #define COLOR_WAIT_USB 0x00FFFF
-#define COLOR_WAIT_USB2 0x80FFFF
+#define COLOR_WAIT_USB2 0x00A5FF
 #define COLOR_FAIL 0x0000FF
-#define COLOR_SUCCESS 0xFFFFFF
+#define COLOR_SUCCESS 0x00FF00
+#define COLOR_DONE 0xFFFFFF
+
+#define Z_BIAS 0xffffff00
 
 int graph_initialize_custom()
 {
@@ -70,34 +72,16 @@ void init_gs()
 	g_frame.psm = GS_PSM_32;
 	g_frame.address = graph_vram_allocate(FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, GRAPH_ALIGN_PAGE);
 
-	// Enable the zbuffer.
-	g_z.enable = DRAW_ENABLE;
-	g_z.mask = 0;
-	g_z.method = ZTEST_METHOD_GREATER_EQUAL;
-	g_z.zsm = GS_ZBUF_24;
-	g_z.address = graph_vram_allocate(FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_24, GRAPH_ALIGN_PAGE);
+	g_z_enabled.enable = DRAW_ENABLE;
+	g_z_enabled.mask = 0;
+	g_z_enabled.method = ZTEST_METHOD_ALLPASS;
+	g_z_enabled.zsm = GS_ZBUF_32;
+	g_z_enabled.address = graph_vram_allocate(FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, GRAPH_ALIGN_PAGE);
+
+	g_z_disabled = g_z_enabled;
+	g_z_disabled.mask = 1; // Disable the Z buffer for this test
 
 	graph_initialize_custom();
-}
-
-void init_drawing_environment()
-{
-	qword_t *packet = aligned_alloc(64, sizeof(qword_t) * 128);
-	qword_t *q = packet;
-
-	q = draw_setup_environment(q, 0, &g_frame, &g_z);
-
-	q = draw_primitive_xyoffset(q, 0, WINDOW_X, WINDOW_Y);
-	
-	q = draw_disable_tests(q, 0, &g_z);
-
-	// Finish setting up the environment.
-	q = draw_finish(q);
-
-	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
-	dma_wait_fast();
-
-	free(packet);
 }
 
 qword_t* my_draw_clear(qword_t* q, unsigned rgb)
@@ -109,21 +93,19 @@ qword_t* my_draw_clear(qword_t* q, unsigned rgb)
 	bg_color.a = 0x80;
 	bg_color.q = 1.0f;
 
-	PACK_GIFTAG(q, GIF_SET_TAG(7, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+	PACK_GIFTAG(q, GIF_SET_TAG(6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
 	q++;
 	PACK_GIFTAG(q, GIF_SET_PRIM(PRIM_TRIANGLE_STRIP, 0, 0, 0, 0, 0, 0, 0, 0), GIF_REG_PRIM);
 	q++;
 	PACK_GIFTAG(q, bg_color.rgbaq, GIF_REG_RGBAQ);
 	q++;
-	PACK_GIFTAG(q, GIF_SET_XYZ(WINDOW_X << 4, WINDOW_X << 4, 0), GIF_REG_XYZ2);
+	PACK_GIFTAG(q, GIF_SET_XYZ(0, 0, 0), GIF_REG_XYZ2);
 	q++;
-	PACK_GIFTAG(q, bg_color.rgbaq, GIF_REG_RGBAQ);
+	PACK_GIFTAG(q, GIF_SET_XYZ(0xffff, 0, 0), GIF_REG_XYZ2);
 	q++;
-	PACK_GIFTAG(q, GIF_SET_XYZ((WINDOW_X + FRAME_WIDTH) << 4, WINDOW_Y << 4, 0), GIF_REG_XYZ2);
+	PACK_GIFTAG(q, GIF_SET_XYZ(0, 0xffff, 0), GIF_REG_XYZ2);
 	q++;
-	PACK_GIFTAG(q, GIF_SET_XYZ(WINDOW_X << 4, (WINDOW_Y + FRAME_HEIGHT) << 4, 0), GIF_REG_XYZ2);
-	q++;
-	PACK_GIFTAG(q, GIF_SET_XYZ((WINDOW_X + FRAME_WIDTH) << 4, (WINDOW_Y + FRAME_HEIGHT) << 4, 0), GIF_REG_XYZ2);
+	PACK_GIFTAG(q, GIF_SET_XYZ(0xffff, 0xffff, 0), GIF_REG_XYZ2);
 	q++;
 	return q;
 }
@@ -142,7 +124,7 @@ void my_draw_clear_send(unsigned rgb)
 	free(packet);
 }
 
-int render_test()
+int render_test(int window_x, int window_y)
 {
 	prim_t prim;
 	color_t color;
@@ -162,60 +144,63 @@ int render_test()
 	prim.mapping_type = PRIM_MAP_ST;
 	prim.colorfix = PRIM_UNFIXED;
 	
-	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 1024);
+	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 4096);
 	qword_t* q;
 	u64 *dw;
 
-	for (;;)
+	// View the ZBuffer as a color buffer for debugging
+	// graph_set_framebuffer(0, g_z_enabled.address, g_frame.width, g_frame.psm, 0, 0);
+
+	q = packet;
+
+	q = draw_setup_environment(q, 0, &g_frame, &g_z_enabled);
+
+	q = draw_primitive_xyoffset(q, 0, window_x, window_y);
+	
+	q = draw_disable_tests(q, 0, &g_z_enabled);
+
+	q = draw_finish(q);
+
+	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+	dma_wait_fast();
+
+	q = packet;
+	
+	q = my_draw_clear(q, 0);
+
+	q = draw_framebuffer(q, 0, &g_frame);
+
+	dw = (u64*)draw_prim_start(q, 0, &prim, &color);
+
+	for (int i = 0; i < FRAME_HEIGHT; i++)
 	{
+		xyz_t xyz;
+		xyz.x = 0;
+		xyz.y = i << 4;
+		xyz.z = Z_BIAS;
+		*dw++ = xyz.xyz;
 
-		// View the ZBuffer as a color buffer for debugging
-		graph_set_framebuffer(0, g_z.address, g_frame.width, g_frame.psm, 0, 0);
+		*dw++ = color.rgbaq;
 
-		q = packet;
-		
-		q = my_draw_clear(q, 0);
-
-		q = draw_framebuffer(q, 0, &g_frame);
-
-		dw = (u64*)draw_prim_start(q, 0, &prim, &color);
-
-		for (int i = 0; i < FRAME_HEIGHT / 2; i++)
-		{
-			xyz_t xyz;
-			// xyz.x = WINDOW_X << 4;
-			xyz.x = 0;
-			xyz.y = (WINDOW_Y + i * 2) << 4;
-			xyz.z = 0;
-			*dw++ = xyz.xyz;
-
-			*dw++ = color.rgbaq;
-
-			xyz.x = (4096 << 4) - 1;
-			// xyz.y = (WINDOW_Y + i * 2) << 4;
-			xyz.z = i;
-			*dw++ = xyz.xyz;
-		}
-
-		if ((u32)dw % 16)
-			*dw++ = 0;
-
-		q = draw_prim_end((qword_t *)dw, 3, GIF_REG_XYZ2 | (GIF_REG_RGBAQ << 4) | (GIF_REG_XYZ2 << 8));
-
-		q = draw_finish(q);
-
-		dma_wait_fast();
-		dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
-
-		draw_wait_finish();
-
-		graph_wait_vsync();
-
-		break;
+		xyz.x = 0xffff;
+		xyz.y = i << 4;
+		xyz.z = Z_BIAS + i;
+		*dw++ = xyz.xyz;
 	}
 
-	// Set the framebuffer back to the main frame buffer
-	// graph_set_framebuffer(0, g_frame.address, g_frame.width, g_frame.psm, 0, 0);
+	if ((u32)dw % 16)
+		*dw++ = 0;
+
+	q = draw_prim_end((qword_t *)dw, 3, GIF_REG_XYZ2 | (GIF_REG_RGBAQ << 4) | (GIF_REG_XYZ2 << 8));
+
+	q = draw_finish(q);
+
+	dma_wait_fast();
+	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+
+	draw_wait_finish();
+
+	graph_wait_vsync();
 
 	free(packet);
 	return 0;
@@ -301,7 +286,7 @@ void _gs_glue_read_framebuffer()
 	q++;
 	PACK_GIFTAG(q, GS_SET_FINISH(1), GS_REG_FINISH);
 	q++;
-	PACK_GIFTAG(q, GS_SET_BITBLTBUF(g_z.address >> 6, FRAME_WIDTH >> 6, GS_PSMZ_24, 0, 0, 0), GS_REG_BITBLTBUF);
+	PACK_GIFTAG(q, GS_SET_BITBLTBUF(g_z_enabled.address >> 6, FRAME_WIDTH >> 6, GS_PSMZ_32, 0, 0, 0), GS_REG_BITBLTBUF);
 	q++;
 	PACK_GIFTAG(q, GS_SET_TRXPOS(0, 0, 0, 0, 0), GS_REG_TRXPOS);
 	q++;
@@ -324,44 +309,7 @@ void _gs_glue_read_framebuffer()
 	return;
 }
 
-// void read_z_data()
-// {
-// 	// FIXME: THIS WILL DESTROY Z BUFFER CONTENTS!
-// 	// DISABLE Z BUFFER TESTS BEFORE READING!
-// 	my_draw_clear_send(COLOR_READING_Z); // Clear screen to indicate start of Z data reading
-
-// 	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 16);
-// 	qword_t* q = packet;
-
-// 	PACK_GIFTAG(q, GIF_SET_TAG(5, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
-// 	q++;
-// 	PACK_GIFTAG(q, GS_SET_FINISH(1), GS_REG_FINISH);
-// 	q++;
-// 	PACK_GIFTAG(q, GS_SET_BITBLTBUF(g_z.address >> 6, FRAME_WIDTH >> 6, GS_PSMZ_24, 0, 0, 0), GS_REG_BITBLTBUF);
-// 	q++;
-// 	PACK_GIFTAG(q, GS_SET_TRXPOS(0, 0, 0, 0, 0), GS_REG_TRXPOS);
-// 	q++;
-// 	PACK_GIFTAG(q, GS_SET_TRXREG(FRAME_WIDTH, FRAME_HEIGHT), GS_REG_TRXREG);
-// 	q++;
-// 	PACK_GIFTAG(q, GS_SET_TRXDIR(1), GS_REG_TRXDIR); // Start host -> local
-// 	q++;
-
-// 	// Send packet
-// 	dma_wait_fast();
-// 	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
-// 	draw_wait_finish();
-
-// 	// Now read from VIF1
-// 	dma_channel_wait(DMA_CHANNEL_VIF1, 0);
-
-// 	dma_channel_receive_normal(DMA_CHANNEL_VIF1, z_data, sizeof(z_data), 0, 0);
-
-// 	dma_channel_wait(DMA_CHANNEL_VIF1, 0);
-
-// 	free(packet);
-// }
-
-void write_z_data_to_usb()
+int write_z_data_to_usb(const char* filename)
 {
 	printf("Waiting for USB to be ready...\n");
 	my_draw_clear_send(COLOR_WAIT_USB); // Clear screen to indicate start of USB operation
@@ -377,42 +325,24 @@ void write_z_data_to_usb()
 	{
 		my_draw_clear_send(COLOR_FAIL); // Red background if USB not ready
 		printf("USB not ready!\n");
-		return;
+		return -1;
 	}
 
-	printf("USB is ready, writing z_data.bmp...\n");
+	printf("USB is ready, writing %s...\n", filename);
 
-	my_draw_clear_send(COLOR_WAIT_USB2); // Clear screen to indicate USB operation in progress
+	my_draw_clear_send(COLOR_WAIT_USB2);
 
-	// FILE* file = fopen("mass:z_data.bin", "wb");
-	// if (file == NULL)
-	// {
-	// 	my_draw_clear_send(COLOR_FAIL); // Red background if file open failed
-	// 	printf("Failed to open z_data.bin for writing!\n");
-	// 	return;
-	// }
-
-	if (write_bmp("mass:z_data.bmp", z_data, FRAME_WIDTH, FRAME_HEIGHT, 24) != 0)
+	if (write_bmp(filename, z_data, FRAME_WIDTH, FRAME_HEIGHT, 32) != 0)
 	{
 		my_draw_clear_send(COLOR_FAIL); // Red background if BMP write failed
-		printf("Failed to write z_data.bmp!\n");
-		// fclose(file);
-		return;
+		printf("Failed to write %s!\n", filename);
+		return -1;
 	}
-	// size_t written = fwrite(z_data, 1, sizeof(z_data), file);
-	// fflush(file); // Ensure data is written to disk
-	// fclose(file);
-
-	// if (written != sizeof(z_data))
-	// {
-	// 	my_draw_clear_send(COLOR_FAIL); // Red background if write failed
-	// 	printf("Failed to write all data to z_data.bin!\n");
-	// 	return;
-	// }
 
 	my_draw_clear_send(COLOR_SUCCESS);
 
-	printf("Z data written successfully to mass:z_data.bmp\n");
+	printf("Z data written successfully to %s\n", filename);
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -420,59 +350,68 @@ int main(int argc, char *argv[])
 	dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
 	dma_channel_fast_waits(DMA_CHANNEL_GIF);
 
-	memset(z_data, 0, sizeof(z_data));
+	char filename[32];
+	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 1024);
+	int i;
 
 	init_gs();
 
-	init_drawing_environment();
+	// init_drawing_environment();
 
-	render_test();
-
-	_gs_glue_read_framebuffer();
-
-	int x, y;
-	for (y = FRAME_HEIGHT - 1; y >= FRAME_HEIGHT - 6; y--)
+	for (i = 0; i < 4; i++)
 	{
-		for (x = FRAME_WIDTH - 1; x >= FRAME_WIDTH - 6; x--)
+		memset(z_data, 0, sizeof(z_data));
+
+		render_test(i * 1024, 0);
+
+		_gs_glue_read_framebuffer();
+
+		// Set the framebuffer back to the main frame buffer
+		graph_set_framebuffer(0, g_frame.address, g_frame.width, g_frame.psm, 0, 0);
+
+		// Subtract the bias from the Z buffer
+		for (int j = 0; j < FRAME_HEIGHT * FRAME_WIDTH; j++)
 		{
-			u32 rgb = (
-				(z_data[(y * FRAME_WIDTH + x) * 3 + 0]) |
-				(z_data[(y * FRAME_WIDTH + x) * 3 + 1] << 8) |
-				(z_data[(y * FRAME_WIDTH + x) * 3 + 2] << 16)
-			);
-			printf("%08X ", rgb);
+			u32 pixel = (u32)z_data[j * 4] | ((u32)z_data[j * 4 + 1] << 8) | ((u32)z_data[j * 4 + 2] << 16) | ((u32)z_data[j * 4 + 3] << 24);
+			pixel -= Z_BIAS;
+			z_data[j * 4] = pixel & 0xFF; // Red
+			z_data[j * 4 + 1] = (pixel >> 8) & 0xFF; // Green
+			z_data[j * 4 + 2] = (pixel >> 16) & 0xFF; // Blue
+			z_data[j * 4 + 3] = 0xFF; // Alpha (just make opaque)
 		}
-		printf("\n");
+		
+		qword_t* q = packet;
+		
+		q = draw_setup_environment(q, 0, &g_frame, &g_z_disabled);
+
+		q = draw_primitive_xyoffset(q, 0, 0, 0);
+
+		q = draw_disable_tests(q, 0, &g_z_disabled);
+
+		// Finish setting up the environment.
+		q = draw_finish(q);
+
+		printf("DEBUG %d\n", __LINE__);
+
+		dma_wait_fast();
+		dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+		draw_wait_finish();
+
+		sprintf(filename, "mass:z_data_%02d.bmp", i);
+		if (write_z_data_to_usb(filename) != 0)
+		{
+			printf("Failed to write Z data to USB for iteration %d\n", i);
+			break;
+		}
 	}
 
-	// Set the framebuffer back to the main frame buffer
-	graph_set_framebuffer(0, g_frame.address, g_frame.width, g_frame.psm, 0, 0);
-
-	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 32);
-	qword_t* q = packet;
-	g_z.enable = DRAW_DISABLE; // Disable Z buffer tests for the rest of the program
+	if (i == 4)
+	{
+		my_draw_clear_send(COLOR_DONE);
+		printf("Z precision test completed successfully.\n");
+	}
 	
-	q = draw_setup_environment(q, 0, &g_frame, &g_z);
-
-	q = draw_primitive_xyoffset(q, 0, WINDOW_X, WINDOW_Y);
-	
-	q = draw_disable_tests(q, 0, &g_z);
-
-	// Finish setting up the environment.
-	q = draw_finish(q);
-
-	dma_wait_fast();
-	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
-	draw_wait_finish();
-
 	free(packet);
-
-	
-	// SleepThread();
-	// read_z_data();
-
-	write_z_data_to_usb();
-
 	SleepThread();
 
 	return 0;
