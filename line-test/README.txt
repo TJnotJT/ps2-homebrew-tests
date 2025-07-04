@@ -1,0 +1,1 @@
+The purpose of this test is to check the behavior of pixel perfect line drawing in PCSX2.

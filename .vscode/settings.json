@@ -40,6 +40,8 @@
     "ioman.h": "c",
     "sbv_patches.h": "c",
     "unistd.h": "c",
-    "ee_regs.h": "c"
+    "ee_regs.h": "c",
+    "bmp.h": "c",
+    "usb.h": "c"
   }
 }

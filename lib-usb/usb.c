@@ -12,6 +12,8 @@
 #include <sbv_patches.h>
 
 #include "usb.h"
+#include "../lib-bmp/bmp.h"
+#include "../lib-common/common.h"
 
 extern unsigned int size_bdm_irx;
 extern unsigned int size_bdmfs_fatfs_irx;
@@ -69,4 +71,56 @@ void load_irx_usb()
 
 	int usbmass_irx_id = SifExecModuleBuffer(&usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, NULL);
 	printf("USB Mass ID is %d\n", usbmass_irx_id);
-};
+}
+
+
+#define COLOR_WAIT_USB 0x00FFFF
+#define COLOR_WAIT_USB2 0x00A5FF
+#define COLOR_FAIL 0x0000FF
+#define COLOR_SUCCESS 0x00FF00
+#define COLOR_DONE 0xFFFFFF
+
+int write_bmp_to_usb(const char* filename, const u8* data, u32 width, u32 height, u32 psm, void (*set_debug_color)(u32 color))
+{
+	printf("Waiting for USB to be ready...\n");
+	if (set_debug_color)
+		set_debug_color(COLOR_WAIT_USB); // Clear screen to indicate start of USB operation
+
+	FlushCache(0); // We read data with DMA so flush before writing to USB
+
+	reset_iop();
+	load_irx_usb();
+
+	if (wait_usb_ready() != 0)
+	{
+		if (set_debug_color)
+			set_debug_color(COLOR_FAIL); // Red background if USB not ready
+		printf("USB not ready!\n");
+		return -1;
+	}
+
+	printf("USB is ready, writing %s...\n", filename);
+
+	if (set_debug_color)
+		set_debug_color(COLOR_WAIT_USB2);
+
+	if (write_bmp(filename, data, width, height, gs_psm_bpp(psm)) != 0)
+	{
+		if (set_debug_color)
+			set_debug_color(COLOR_FAIL); // Red background if BMP write failed
+		printf("Failed to write %s!\n", filename);
+		return -1;
+	}
+
+	if (set_debug_color)
+		set_debug_color(COLOR_SUCCESS);
+
+	printf("Bitmap data written successfully to %s\n", filename);
+	return 0;
+}
+
+#undef COLOR_WAIT_USB
+#undef COLOR_WAIT_USB2
+#undef COLOR_FAIL
+#undef COLOR_SUCCESS
+#undef COLOR_DONE

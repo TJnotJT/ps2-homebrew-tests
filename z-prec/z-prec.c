@@ -25,9 +25,12 @@
 #include <draw.h>
 #include <draw3d.h>
 #include <math3d.h>
+#include <dirent.h> // mkdir()
+#include <unistd.h> // rmdir()
 
-#include "usb.h"
-#include "bmp.h"
+#include "../lib-usb/usb.h"
+#include "../lib-bmp/bmp.h"
+#include "../lib-read-fb/read-fb.h"
 
 #define FRAME_WIDTH 1024
 #define FRAME_HEIGHT 256
@@ -38,7 +41,6 @@ zbuffer_t g_z_disabled; // Z buffer
 
 unsigned char z_data[4 * FRAME_HEIGHT * FRAME_WIDTH] __attribute__((aligned(64))); // For reading Z buffer back
 
-#define COLOR_READING_Z 0x00FF00
 #define COLOR_WAIT_USB 0x00FFFF
 #define COLOR_WAIT_USB2 0x00A5FF
 #define COLOR_FAIL 0x0000FF
@@ -206,144 +208,41 @@ int render_test(int window_x, int window_y)
 	return 0;
 }
 
+// int write_z_data_to_usb(const char* filename)
+// {
+// 	printf("Waiting for USB to be ready...\n");
+// 	my_draw_clear_send(COLOR_WAIT_USB); // Clear screen to indicate start of USB operation
 
-// Taken from gs4ps2.c (https://github.com/F0bes/gs4ps2)
-void gs_glue_read_fifo(u32 QWtotal, u128* data)
-{
-	volatile u32* VIF1CHCR = (u32*)0x10009000;
-	volatile u32* VIF1MADR = (u32*)0x10009010;
-	volatile u32* VIF1QWC = (u32*)0x10009020;
-	volatile u128* VIF1FIFO = (u128*)0x10005000;
-	volatile u32* VIF1_STAT = (u32*)0x10003C00;
+// 	printf("DEBUG %d\n", __LINE__);
 
-	*VIF1_STAT = (1 << 23); // Set the VIF FIFO direction to VIF1 -> Main Memory
-	*GS_REG_BUSDIR = 1;
+// 	FlushCache(0); // We read data with DMA so flush before writing to USB
 
-	u32 QWrem = QWtotal;
-	u128* data_curr = data;
+// 	reset_iop();
+// 	load_irx_usb();
 
-	printf("Doing a readback of %d QW", QWtotal);
-	while (QWrem >= 8) // Data transfers from the FIFO must be 128 byte aligned
-	{
-		*VIF1MADR = (u32)data_curr;
-		u32 QWC = (((0xF000) < QWrem) ? (0xF000) : QWrem);
-		QWC &= ~7;
+// 	if (wait_usb_ready() != 0)
+// 	{
+// 		my_draw_clear_send(COLOR_FAIL); // Red background if USB not ready
+// 		printf("USB not ready!\n");
+// 		return -1;
+// 	}
 
-		*VIF1QWC = QWC;
-		QWrem -= QWC;
-		data_curr += QWC;
+// 	printf("USB is ready, writing %s...\n", filename);
 
-		printf("    Reading chunk of %d QW. (Remaining %d)", QWC, QWrem);
-		FlushCache(0);
-		*VIF1CHCR = 0x100;
-		asm __volatile__(" sync.l\n");
-		while (*VIF1CHCR & 0x100)
-		{
-			//printf("VIF1CHCR %X\nVIF1STAT %X\nVIF1QWC %X\nGIF_STAT %X\n"
-			//,*VIF1CHCR,*VIF1_STAT, *VIF1QWC, *(volatile u64*)0x10003020);
-		};
-	}
-	printf("Finished off DMAC transfer, manually reading the %d QW from the fifo", QWrem);
-	// Because we truncate the QWC, finish of the rest of the transfer
-	// by reading the FIFO directly. Apparently this is how retail games do it.
-	u32 qwFlushed = 0;
-	while ((*VIF1_STAT >> 24))
-	{
-		printf("VIF1_STAT=%x", *VIF1_STAT);
-		*data_curr = *VIF1FIFO;
-		QWrem++;
-		qwFlushed += 4;
-		asm("nop\nnop\nnop\n");
-	}
-	printf("Finished off the manual read (%d QW)\n", qwFlushed);
-	*GS_REG_BUSDIR = 0; // Reset BUSDIR
-	*VIF1_STAT = 0; // Reset FIFO direction
+// 	my_draw_clear_send(COLOR_WAIT_USB2);
 
-	printf("Resetting TRXDIR");
-	// Create a data packet that sets TRXDIR to 3, effectively cancelling whatever
-	// transfer may be going on.
-	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 2);
-	qword_t* q = packet;
-	PACK_GIFTAG(q, GIF_SET_TAG(1, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
-	q++;
-	q->dw[0] = GS_SET_TRXDIR(3);
-	q->dw[1] = GS_REG_TRXDIR;
-	q++;
-	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
-	dma_channel_wait(DMA_CHANNEL_GIF, 0);
+// 	if (write_bmp(filename, z_data, FRAME_WIDTH, FRAME_HEIGHT, 32) != 0)
+// 	{
+// 		my_draw_clear_send(COLOR_FAIL); // Red background if BMP write failed
+// 		printf("Failed to write %s!\n", filename);
+// 		return -1;
+// 	}
 
-	free(packet);
-}
+// 	my_draw_clear_send(COLOR_SUCCESS);
 
-// Taken from gs4ps2.c (https://github.com/F0bes/gs4ps2)
-void _gs_glue_read_framebuffer()
-{
-	*GS_REG_CSR = 2; // Clear any previous FINISH events
-
-	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 16);
-	qword_t* q = packet;
-	PACK_GIFTAG(q, GIF_SET_TAG(6, 1, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
-	q++;
-	PACK_GIFTAG(q, GS_SET_FINISH(1), GS_REG_FINISH);
-	q++;
-	PACK_GIFTAG(q, GS_SET_BITBLTBUF(g_z_enabled.address >> 6, FRAME_WIDTH >> 6, GS_PSMZ_32, 0, 0, 0), GS_REG_BITBLTBUF);
-	q++;
-	PACK_GIFTAG(q, GS_SET_TRXPOS(0, 0, 0, 0, 0), GS_REG_TRXPOS);
-	q++;
-	PACK_GIFTAG(q, GS_SET_TRXREG(FRAME_WIDTH, FRAME_HEIGHT), GS_REG_TRXREG);
-	q++;
-	PACK_GIFTAG(q, GS_SET_FINISH(1), GS_REG_FINISH);
-	q++;
-	PACK_GIFTAG(q, GS_SET_TRXDIR(1), GS_REG_TRXDIR);
-	q++;
-
-	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
-	dma_channel_wait(DMA_CHANNEL_GIF, 0);
-
-	while (!(*GS_REG_CSR & 2))
-		;
-
-
-	gs_glue_read_fifo(sizeof(z_data) / sizeof(qword_t), (u128*)z_data);
-
-	return;
-}
-
-int write_z_data_to_usb(const char* filename)
-{
-	printf("Waiting for USB to be ready...\n");
-	my_draw_clear_send(COLOR_WAIT_USB); // Clear screen to indicate start of USB operation
-
-	printf("DEBUG %d\n", __LINE__);
-
-	FlushCache(0); // We read data with DMA so flush before writing to USB
-
-	reset_iop();
-	load_irx_usb();
-
-	if (wait_usb_ready() != 0)
-	{
-		my_draw_clear_send(COLOR_FAIL); // Red background if USB not ready
-		printf("USB not ready!\n");
-		return -1;
-	}
-
-	printf("USB is ready, writing %s...\n", filename);
-
-	my_draw_clear_send(COLOR_WAIT_USB2);
-
-	if (write_bmp(filename, z_data, FRAME_WIDTH, FRAME_HEIGHT, 32) != 0)
-	{
-		my_draw_clear_send(COLOR_FAIL); // Red background if BMP write failed
-		printf("Failed to write %s!\n", filename);
-		return -1;
-	}
-
-	my_draw_clear_send(COLOR_SUCCESS);
-
-	printf("Z data written successfully to %s\n", filename);
-	return 0;
-}
+// 	printf("Z data written successfully to %s\n", filename);
+// 	return 0;
+// }
 
 int main(int argc, char *argv[])
 {
@@ -360,11 +259,12 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < 4; i++)
 	{
+
 		memset(z_data, 0, sizeof(z_data));
 
 		render_test(i * 1024, 0);
 
-		_gs_glue_read_framebuffer();
+		_gs_glue_read_framebuffer(g_z_enabled.address, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, z_data);
 
 		// Set the framebuffer back to the main frame buffer
 		graph_set_framebuffer(0, g_frame.address, g_frame.width, g_frame.psm, 0, 0);
@@ -391,14 +291,14 @@ int main(int argc, char *argv[])
 		// Finish setting up the environment.
 		q = draw_finish(q);
 
-		printf("DEBUG %d\n", __LINE__);
 
 		dma_wait_fast();
 		dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 		draw_wait_finish();
 
 		sprintf(filename, "mass:z_data_%02d.bmp", i);
-		if (write_z_data_to_usb(filename) != 0)
+
+		if (write_bmp_to_usb(filename, z_data, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, my_draw_clear_send) != 0)
 		{
 			printf("Failed to write Z data to USB for iteration %d\n", i);
 			break;

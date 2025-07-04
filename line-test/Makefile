@@ -8,11 +8,11 @@
 
 include ../Makefile.destdir
 
-EE_LIBS = -lkernel -ldraw -lpatches -lgraph -lmath3d -ldma
+EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: z-prec.elf
+all: line-test.elf
 
-z-prec.elf: z-prec.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
+line-test.elf: line-test.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	$(EE_STRIP) --strip-all $@
@@ -20,11 +20,11 @@ ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
 
-z-prec.o: z-prec.c
+line-test.o: line-test.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
 
 clean:
-	rm -f z-prec.elf z-prec.o
+	rm -f line-test.elf line-test.o
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
