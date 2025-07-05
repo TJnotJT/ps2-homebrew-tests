@@ -1,5 +1,4 @@
-#ifndef COMMON_H
-#define COMMON_H
+#pragma once
 
 #include <gs_psm.h>
 #include <assert.h>
@@ -28,4 +27,11 @@ static inline u32 gs_psm_bpp(u32 psm)
   return 0; // Should never reach here, but added to avoid compiler warnings
 }
 
-#endif // COMMON_H
+typedef union uv_t {
+	struct {
+		u16 u;
+		u16 v;
+		u32 pad;
+	};
+	u32 uv;
+} uv_t __attribute__((aligned(16)));
