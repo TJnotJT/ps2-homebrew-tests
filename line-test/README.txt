@@ -1,1 +1,1 @@
-The purpose of this test is to check the behavior of pixel perfect line drawing in PCSX2.
+The purpose of this test is to check the behavior of pixel perfect line drawing in PCSX2. Note that the the last pixel of a line should not be draw if it falls exactly on a pixel center (in fact it should exit the diamond around the center to be drawn). However, it seems that even the software renderer does not follow this convention.

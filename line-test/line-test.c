@@ -34,8 +34,7 @@
 #define FRAME_HEIGHT 448
 #define TEX_SIZE 128
 #define TEX_CHECKER_SIZE 8
-#define TEX_COLOR_1 0x800000FF
-#define TEX_COLOR_2 0x8000FF00
+#define TEX_COLOR 0x800000FF
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
 
@@ -62,17 +61,9 @@ void init_texture_data() {
   for (int x = 0; x < TEX_SIZE; x++) {
     for (int y = 0; y < TEX_SIZE; y++) {
       if (((x / TEX_CHECKER_SIZE) & 1) == 0) {
-				if ((y & 1) == 0) {
-					TEXTURE_DATA[y][x][0] = (TEX_COLOR_1 >> 0) & 0xFF;
-					TEXTURE_DATA[y][x][1] = (TEX_COLOR_1 >> 8) & 0xFF;
-					TEXTURE_DATA[y][x][2] = (TEX_COLOR_1 >> 16) & 0xFF;
-					TEXTURE_DATA[y][x][3] = (TEX_COLOR_1 >> 24) & 0xFF;
-				} else {
-					TEXTURE_DATA[y][x][0] = (TEX_COLOR_2 >> 0) & 0xFF;
-					TEXTURE_DATA[y][x][1] = (TEX_COLOR_2 >> 8) & 0xFF;
-					TEXTURE_DATA[y][x][2] = (TEX_COLOR_2 >> 16) & 0xFF;
-					TEXTURE_DATA[y][x][3] = (TEX_COLOR_2 >> 24) & 0xFF;
-				}
+				TEXTURE_DATA[y][x][0] = (TEX_COLOR >> 0) & 0xFF;
+				TEXTURE_DATA[y][x][1] = (TEX_COLOR >> 8) & 0xFF;
+				TEXTURE_DATA[y][x][2] = (TEX_COLOR >> 16) & 0xFF;
       } else {
         TEXTURE_DATA[y][x][0] = 0x00;
         TEXTURE_DATA[y][x][1] = 0x00;
@@ -280,29 +271,36 @@ int render_test()
 		q = my_draw_clear(q, 0x80ffffff);
 
 		// draw prims
+		prim.type = PRIM_LINE;
+		prim.shading = PRIM_SHADE_FLAT;
+		prim.mapping = DRAW_ENABLE;
+		prim.fogging = DRAW_DISABLE;
+		prim.blending = DRAW_DISABLE;
+		prim.antialiasing = DRAW_DISABLE;
+		prim.mapping_type = PRIM_MAP_UV;
+		prim.colorfix = PRIM_UNFIXED;
 		dw = (u64*)draw_prim_start(q, 0, &prim, &color);
-		for (int i = 0; i < FRAME_HEIGHT; i++)
+		for (int y = 0; y < 1; y++)
 		{
-			for (int j = 0; j < 2; j++)
+			for (int flip = 0; flip < 4; flip++)
 			{
-				uv.pad = (8 * j) << 4;
-				uv.u = 0;
-				uv.v = 8 + (j << 4);
-				*dw++ = uv.uv;
+				for (int vert = 0; vert < 2; vert++)
+				{
+					int x_off = (flip & 1) ^ vert;
+					int u_off = ((flip >> 1) & 1) ^ vert;
+					if (flip != 1)
+						continue;
 
-				xyz.x = (WINDOW_X + FRAME_WIDTH / 2 + 8 * j) << 4;
-				xyz.y = (WINDOW_Y + i) << 4; 
- 				xyz.z = 0; 
- 				*dw++ = xyz.xyz;
+					uv.pad = 0;
+					uv.u = (16 + 8 * u_off) << 4;
+					uv.v = 0;
+					*dw++ = uv.uv;
 
-				uv.u = 8 << 4;
-				uv.v = 8 + (j << 4);
-				*dw++ = uv.uv;
-
-				xyz.x = (WINDOW_X + FRAME_WIDTH / 2 + 8 * (j + 1)) << 4;
-				xyz.y = (WINDOW_Y + i) << 4;
-				xyz.z = 0;
-				*dw++ = xyz.xyz;
+					xyz.x = (WINDOW_X + 8 + 16 * flip + 8 * x_off) << 4;
+					xyz.y = (WINDOW_Y + y) << 4;
+					xyz.z = 0;
+					*dw++ = xyz.xyz;
+				}
 			}
 		}
 
@@ -311,13 +309,70 @@ int render_test()
 
 		q = draw_prim_end((qword_t *)dw, 2, GIF_REG_UV | (GIF_REG_XYZ2 << 4));
 
+		// Draw more prims
+		prim.type = PRIM_LINE_STRIP;
+		prim.shading = PRIM_SHADE_FLAT;
+		prim.mapping = DRAW_DISABLE;
+		prim.fogging = DRAW_DISABLE;
+		prim.blending = DRAW_ENABLE;
+		prim.antialiasing = DRAW_DISABLE;
+		prim.mapping_type = PRIM_MAP_UV;
+		prim.colorfix = PRIM_UNFIXED;
+
+		blend_t blend;
+		blend.color1 = BLEND_COLOR_DEST;
+		blend.color2 = BLEND_COLOR_SOURCE;
+		blend.color3 = BLEND_COLOR_SOURCE;
+		blend.alpha = BLEND_ALPHA_FIXED;
+		blend.fixed_alpha = 0x40; // 50% alpha blending
+
+		q = draw_alpha_blending(q, 0, &blend);
+
+		dw = (u64*)draw_prim_start(q, 0, &prim, &color);
+
+		int offset_x = 64;
+		int offset_y = 64;
+		int square_size = 33;
+
+		xyz.x = (WINDOW_X + offset_x) << 4;
+		xyz.y = (WINDOW_Y + offset_y) << 4;
+		xyz.z = 0;
+		*dw++ = xyz.xyz;
+
+		xyz.x = (WINDOW_X + offset_x + square_size) << 4;
+		xyz.y = (WINDOW_Y + offset_y) << 4;
+		xyz.z = 0;
+		*dw++ = xyz.xyz;
+
+		xyz.x = (WINDOW_X + offset_x + square_size) << 4;
+		xyz.y = (WINDOW_Y + offset_y + square_size) << 4;
+		xyz.z = 0;
+		*dw++ = xyz.xyz;
+
+		xyz.x = (WINDOW_X + offset_x) << 4;
+		xyz.y = (WINDOW_Y + offset_y + square_size) << 4;
+		xyz.z = 0;
+		*dw++ = xyz.xyz;
+
+		xyz.x = (WINDOW_X + offset_x) << 4;
+		xyz.y = (WINDOW_Y + offset_y) << 4;
+		xyz.z = 0;
+		*dw++ = xyz.xyz;
+
+		if ((u32)dw % 16)
+			*dw++ = 0;
+
+		u64 regslist = (u64)GIF_REG_XYZ2 | ((u64)GIF_REG_XYZ2 << 4) | ((u64)GIF_REG_XYZ3 << 8) | ((u64)GIF_REG_XYZ2 << 12) | ((u64)GIF_REG_XYZ3 << 16);
+		q = draw_prim_end((qword_t *)dw, 5, regslist);
+
 		q = draw_finish(q);
 
 		dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 		dma_channel_wait(DMA_CHANNEL_GIF, 0);
 		draw_wait_finish();
 		graph_wait_vsync();
-	} while (0); // Single iteration
+
+	} while (0);
 
 	free(packet);
 	return 0;
