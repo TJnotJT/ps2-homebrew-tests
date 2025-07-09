@@ -109,21 +109,72 @@ qword_t* my_draw_clear(qword_t* q, unsigned rgb)
 	return q;
 }
 
-int render_test()
+qword_t* draw_prim(qword_t* q, u32 prim_type)
 {
-	prim_t prim;
-	color_t color;
-	xyz_t xyz;
+	int n;
 
-	color.r = 0xFF;
-	color.g = 0x00;
-	color.b = 0x00;
-	color.a = 0x80;
-	color.q = 1.0f;
+	switch (prim_type)
+	{
+		case PRIM_POINT:
+			n = 1;
+			break;
+		case PRIM_LINE:
+			n = 2;
+			break;
+		case PRIM_LINE_STRIP:
+			n = 3;
+			break;
+		case PRIM_TRIANGLE:
+			n = 3;
+			break;
+		case PRIM_TRIANGLE_STRIP:
+			n = 4;
+			break;
+		case PRIM_TRIANGLE_FAN:
+			n = 4;
+			break;
+		case PRIM_SPRITE:
+			n = 2;
+			break;
+		default:
+			n = 0;
+			break;
+	}
+
+	PACK_GIFTAG(q, GIF_SET_TAG(2 * n + 1, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+	q++;
+	PACK_GIFTAG(q, GS_SET_PRIM(prim_type, 0, 0, 0, 0, 0, 0, 0, 0), GIF_REG_PRIM);
+	q++;
+
+	for (int i = 0; i < n; i++)
+	{
+		u8 r = rand() & 0xFF;
+		u8 g = rand() & 0xFF;
+		u8 b = rand() & 0xFF;
+		u8 a = 0x80;
+		float f = 1.0f;
+		u32 f_bits = *(u32*)&f;
+
+		PACK_GIFTAG(q, GIF_SET_RGBAQ(r, g, b, a, f_bits), GIF_REG_RGBAQ);
+		q++;
+
+		u32 x = (WINDOW_X << 4) + rand() % (FRAME_WIDTH << 4);
+		u32 y = (WINDOW_Y << 4) + rand() % (FRAME_HEIGHT << 4);
+		u32 z = 0;
+
+		PACK_GIFTAG(q, GIF_SET_XYZ(x, y, z), GIF_REG_XYZ2);
+		q++;
+	}
+	return q;
+}
+
+int render_test(u32 seed, u32 n_prims)
+{
+	srand(seed);
 	
 	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 8192);
 	qword_t* q;
-	u64 *dw;
+	// u64 *dw;
 
 	// Send a dummy EOP packet
 	q = packet;
@@ -141,119 +192,25 @@ int render_test()
 	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 	dma_channel_wait(DMA_CHANNEL_GIF, 0);
 	draw_wait_finish();
-	graph_wait_vsync();
 
-	do
+	for (int i = 0; i < n_prims; i++)
 	{
-		// Clear
-		q = packet;
-		q = my_draw_clear(q, 0x80ffffff);
+		for (int prim_type = PRIM_POINT; prim_type <= PRIM_SPRITE; prim_type++)
+		{
+			q = packet;
 
-		// Draw triangle
-		prim.type = PRIM_TRIANGLE;
-		prim.shading = PRIM_SHADE_FLAT;
-		prim.mapping = DRAW_ENABLE;
-		prim.fogging = DRAW_DISABLE;
-		prim.blending = DRAW_DISABLE;
-		prim.antialiasing = DRAW_DISABLE;
-		prim.mapping_type = PRIM_MAP_UV;
-		prim.colorfix = PRIM_UNFIXED;
-		dw = (u64*)draw_prim_start(q, 0, &prim, &color);
-		
-		// Vertex 1
-		color.r = 0xFF;
-		color.g = 0x00;
-		color.b = 0x00;
-		color.a = 0x80;
-		color.q = 1.0f;
-		*dw++ = color.rgbaq;
+			q = my_draw_clear(q, 0x80ffffff);
+			q = draw_finish(q);
 
-		xyz.x = (WINDOW_X + 64) << 4;
-		xyz.y = (WINDOW_Y + 64) << 4;
-		xyz.z = 0;
-		*dw++ = xyz.xyz;
+			q = draw_prim(q, prim_type);
+			q = draw_finish(q);
 
-		// Vertex 2
-		color.r = 0x00;
-		color.g = 0xFF;
-		color.b = 0x00;
-		color.a = 0x80;
-		color.q = 1.0f;
-		*dw++ = color.rgbaq;
-
-		xyz.x = (WINDOW_X + 64 + 32) << 4;
-		xyz.y = (WINDOW_Y + 64) << 4;
-		xyz.z = 0;
-		*dw++ = xyz.xyz;
-
-		// Vertex 3
-		color.r = 0x00;
-		color.g = 0x00;
-		color.b = 0xFF;
-		color.a = 0x80;
-		color.q = 1.0f;
-		*dw++ = color.rgbaq;
-
-		xyz.x = (WINDOW_X + 64 + 32) << 4;
-		xyz.y = (WINDOW_Y + 64 + 32) << 4;
-		xyz.z = 0;
-		*dw++ = xyz.xyz;
-
-		if ((u32)dw % 16)
-			*dw++ = 0;
-
-		q = draw_prim_end((qword_t *)dw, 2, GIF_REG_RGBAQ | (GIF_REG_XYZ2 << 4));
-
-		// Draw line
-		prim.type = PRIM_LINE;
-		prim.shading = PRIM_SHADE_FLAT;
-		prim.mapping = DRAW_ENABLE;
-		prim.fogging = DRAW_DISABLE;
-		prim.blending = DRAW_DISABLE;
-		prim.antialiasing = DRAW_DISABLE;
-		prim.mapping_type = PRIM_MAP_UV;
-		prim.colorfix = PRIM_UNFIXED;
-		dw = (u64*)draw_prim_start(q, 0, &prim, &color);
-		
-		// Vertex 1
-		color.r = 0xFF;
-		color.g = 0x00;
-		color.b = 0x00;
-		color.a = 0x80;
-		color.q = 1.0f;
-		*dw++ = color.rgbaq;
-
-		xyz.x = (WINDOW_X + 64) << 4;
-		xyz.y = (WINDOW_Y + 128) << 4;
-		xyz.z = 0;
-		*dw++ = xyz.xyz;
-
-		// Vertex 2
-		color.r = 0x00;
-		color.g = 0xFF;
-		color.b = 0x00;
-		color.a = 0x80;
-		color.q = 1.0f;
-		*dw++ = color.rgbaq;
-
-		xyz.x = (WINDOW_X + 64 + 32) << 4;
-		xyz.y = (WINDOW_Y + 128 + 32) << 4;
-		xyz.z = 0;
-		*dw++ = xyz.xyz;
-
-		if ((u32)dw % 16)
-			*dw++ = 0;
-
-		q = draw_prim_end((qword_t *)dw, 2, GIF_REG_RGBAQ | (GIF_REG_XYZ2 << 4));
-
-		q = draw_finish(q);
-
-		dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
-		dma_channel_wait(DMA_CHANNEL_GIF, 0);
-		draw_wait_finish();
-		graph_wait_vsync();
-
-	} while (1);
+			dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+			dma_channel_wait(DMA_CHANNEL_GIF, 0);
+			draw_wait_finish();
+			graph_wait_vsync();
+		}
+	}
 
 	free(packet);
 	return 0;
@@ -265,7 +222,7 @@ int main(int argc, char *argv[])
 	
   init_gs();
 
-	render_test();
+	render_test(123, 100);
 
 	SleepThread();
 
