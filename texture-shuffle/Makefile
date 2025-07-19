@@ -10,20 +10,21 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: channel-shuffle.elf
+all: texture-shuffle.elf
 
-channel-shuffle.elf: channel-shuffle.o
+texture-shuffle.elf: texture-shuffle.o
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
+	$(EE_STRIP) --strip-all $@
 ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
 
-channel-shuffle.o: channel-shuffle.c
+texture-shuffle.o: texture-shuffle.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
 
 clean:
-	rm -f channel-shuffle.elf channel-shuffle.o
+	rm -f texture-shuffle.elf texture-shuffle.o
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
