@@ -4,6 +4,15 @@
 #include <assert.h>
 #include <tamtypes.h>
 
+#define PAGE_BLOCKS 32
+#define BLOCK_COLUMNS 4
+#define COLUMN_WORDS 32
+#define PAGE_COLUMNS (PAGE_BLOCKS * BLOCK_COLUMNS)
+#define PAGE_WORDS (PAGE_COLUMNS * COLUMN_WORDS)
+#define BLOCK_WORDS (BLOCK_COLUMNS * COLUMN_WORDS)
+
+
+
 static inline u32 gs_psm_bpp(u32 psm)
 {
   switch (psm)
