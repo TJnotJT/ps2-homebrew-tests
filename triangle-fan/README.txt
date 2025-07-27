@@ -1,0 +1,1 @@
+The purpose of this test is to test triangle fans. It draws a bunch of flat shaded triangle fans.
