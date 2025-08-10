@@ -1,0 +1,1 @@
+The purpose of this test is to test switching from a 32 bit RT to a 24 bit RT at the same location.
