@@ -30,11 +30,10 @@
 #define FRAME_HEIGHT 448
 #define NPOS_X 4
 #define NPOS_Y 4
-#define TEX_COLOR 0x800000FF
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
-#define DRAW_COLOR 0x80C0C0C0
-#define CLEAR_COLOR 0x40808080
+#define DRAW_COLOR 0xFFFFFFFF
+#define CLEAR_COLOR 0x00000000
 #define DRAW_Z 0xFFFFFFFF
 
 framebuffer_t g_frame32; // Frame buffer
@@ -231,6 +230,21 @@ int main(int argc, char *argv[])
 		q = render_sprite(q, 6, 1, 1, 0, 0); // 32 bit frame and z
 		q = render_sprite(q, 7, 1, 0, 0, 0); // 24 bit frame and z
 		q = render_sprite(q, 8, 1, 1, 0, 0); // 32 bit frame and z
+
+		// Drawing to the Z buffer as framebuffer
+		q = render_sprite(q, 9, 1, 0, 0, 1); // 24 bit z as frame
+
+		// Drawing to the regular framebuffer again
+		q = render_sprite(q, 10, 1, 0, 0, 0); // 24 bit frame and z
+		q = render_sprite(q, 11, 1, 1, 0, 0); // 32 bit frame and z
+		q = render_sprite(q, 12, 1, 0, 0, 0); // 24 bit frame and z
+
+		// Drawing to the Z buffer as framebuffer
+		q = render_sprite(q, 13, 1, 0, 0, 1); // 32 bit z as frame
+
+		// Drawing to the regular framebuffer again
+		q = render_sprite(q, 14, 1, 0, 0, 0); // 32 bit frame and z
+
 
 		dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 		dma_channel_wait(DMA_CHANNEL_GIF, 0);
