@@ -1,0 +1,1 @@
+The purpose of this test is to test the accuracy of fogging.

@@ -42,6 +42,7 @@
     "unistd.h": "c",
     "ee_regs.h": "c",
     "bmp.h": "c",
-    "usb.h": "c"
+    "usb.h": "c",
+    "read-fb.h": "c"
   }
 }
