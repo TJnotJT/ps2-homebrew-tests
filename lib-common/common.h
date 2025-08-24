@@ -11,8 +11,6 @@
 #define PAGE_WORDS (PAGE_COLUMNS * COLUMN_WORDS)
 #define BLOCK_WORDS (BLOCK_COLUMNS * COLUMN_WORDS)
 
-
-
 static inline u32 gs_psm_bpp(u32 psm)
 {
   switch (psm)
@@ -60,3 +58,6 @@ static inline u32 prim_verts(u32 prim_type)
 	}
 	return 0;
 }
+
+void my_srand(int newseed);
+int my_rand(void);

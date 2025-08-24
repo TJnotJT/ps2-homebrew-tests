@@ -47,12 +47,24 @@ void init_tables()
 
 int xy_to_block_32(int x, int y)
 {
-  assert(0 <= x < 64 && 0 <= y < 32);
+  assert(0 <= x && x < 64 && 0 <= y && y < 32);
   return _block_to_yx_32[y / 8][x / 8];
 }
 
 int xy_to_word_32(int x, int y)
 {
-  assert(0 <= x < 64 && 0 <= y < 32);
+  assert(0 <= x && x < 64 && 0 <= y && y < 32);
   return _word_to_yx_32[y / 4][x / 8];
+}
+
+static unsigned int seed = 1;
+
+// https://stackoverflow.com/questions/11946622/implementation-of-random-number-generator
+void my_srand (int newseed) {
+    seed = (unsigned)newseed & 0x7fffffffU;
+}
+
+int my_rand (void) {
+    seed = (seed * 1103515245U + 12345U) & 0x7fffffffU;
+    return (int)seed;
 }

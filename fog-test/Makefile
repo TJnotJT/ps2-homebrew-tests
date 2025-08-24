@@ -10,9 +10,15 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: fog-test.elf
+all: fog-test.elf fog-expected.elf
 
-fog-test.elf: fog-test.o ../lib-read-fb/lib-read-fb.a
+fog-expected.o: fog-template.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTEST_MODE=0 -c $< -o $@
+
+fog-test.o: fog-template.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTEST_MODE=1 -c $< -o $@
+
+fog-expected.elf: fog-expected.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	$(EE_STRIP) --strip-all $@
@@ -20,11 +26,19 @@ ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
 
-fog-test.o: fog-test.c
+fog-test.elf: fog-test.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
+	$(DIR_GUARD)
+	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
+	$(EE_STRIP) --strip-all $@
+ifdef DEST_DIR
+	cp $@ $(DEST_DIR)
+endif
+
+fog-template.o: fog-template.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
 
 clean:
-	rm -f fog-test.elf fog-test.o
+	rm -f fog-expected.elf fog-test.elf fog-expected.o fog-test.o
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal

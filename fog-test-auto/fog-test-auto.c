@@ -27,6 +27,7 @@
 #include <math3d.h>
 
 #include "../lib-read-fb/read-fb.h"
+#include "../lib-common/common.h"
 
 #define FRAME_WIDTH 512
 #define FRAME_HEIGHT 448
@@ -110,15 +111,29 @@ qword_t* my_draw_clear(qword_t* q, unsigned rgb)
 	return q;
 }
 
+void my_draw_clear_send(unsigned rgb)
+{
+	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 32);
+	qword_t* q = packet;
+	q = my_draw_clear(q, rgb);
+	q = draw_finish(q);
+
+	dma_wait_fast();
+	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+	draw_wait_finish();
+
+	free(packet);
+}
+
 qword_t* draw_sprite(qword_t* q, int prim_rgb, int prim_f, int fog_rgb)
 {
 	PACK_GIFTAG(q, GIF_SET_TAG(5, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
 	q++;
 
-	PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_SPRITE, 0, 0, 1, 0, 0, 0, 0, 0), GIF_REG_PRIM);
+	PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_SPRITE, 0, 0, 1, 0, 0, 0, 0, 0), GS_REG_PRIM);
 	q++;
 
-	PACK_GIFTAG(q, GS_SET_FOG(fog_rgb & 0xFFFFFF), GS_REG_FOG);
+	PACK_GIFTAG(q, fog_rgb & 0xFFFFFF, GS_REG_FOGCOL);
 	q++;
 
 	u8 r = prim_rgb & 0xFF;
@@ -131,8 +146,8 @@ qword_t* draw_sprite(qword_t* q, int prim_rgb, int prim_f, int fog_rgb)
 	PACK_GIFTAG(q, GIF_SET_RGBAQ(r, g, b, a, Q_bits), GIF_REG_RGBAQ);
 	q++;
 
-	u32 x0 = WINDOW_X << 4, x1 = (WINDOW_X + FRAME_WIDTH) << 4;
-	u32 y0 = WINDOW_Y << 4, y1 = (WINDOW_Y + FRAME_HEIGHT) << 4;
+	u32 x0 = WINDOW_X << 4, x1 = (WINDOW_X + 32) << 4;
+	u32 y0 = WINDOW_Y << 4, y1 = (WINDOW_Y + 32) << 4;
 	u32 z0 = 0, z1 = 0;
 
 	PACK_GIFTAG(q, GIF_SET_XYZF(x0, y0, z0, prim_f & 0xFF), GIF_REG_XYZF2);
@@ -147,21 +162,18 @@ qword_t* draw_sprite(qword_t* q, int prim_rgb, int prim_f, int fog_rgb)
 int expected_final_rgb(int prim_rgb, int prim_f, int fog_rgb)
 {
 	const int prim_chan[3] = { (prim_rgb >> 0) & 0xFF, (prim_rgb >> 8) & 0xFF, (prim_rgb >> 16) & 0xFF };
-	const int fog_chan[3] = {  (fog_rgb >> 0) & 0xFF, (fog_rgb >> 8) & 0xFF, (fog_rgb >> 16) & 0xFF };
+	const int fog_chan[3] = { (fog_rgb >> 0) & 0xFF, (fog_rgb >> 8) & 0xFF, (fog_rgb >> 16) & 0xFF };
 	prim_f &= 0xFF;
 
 	int expected_chan[3];
 	for (int i = 0; i < 3; i++)
-	{
-		int chan = ((prim_chan[i] * prim_f) >> 8) + ((fog_chan[i] * (0xFF - prim_f)) >> 8);
-		expected_chan[i] = chan;
-	}
+		expected_chan[i] = (prim_chan[i] * prim_f + fog_chan[i] * (0x100 - prim_f)) >> 8;
 	return (expected_chan[0] << 0) | (expected_chan[1] << 8) | (expected_chan[2] << 16);
 }
 
 int render_test(u32 seed, u32 n_prims)
 {
-	srand(seed);
+	my_srand(seed);
 	
 	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 8192);
 	qword_t* q;
@@ -187,9 +199,9 @@ int render_test(u32 seed, u32 n_prims)
 	{
 		q = packet;
 
-		const int rgb = rand() & 0xFFFFFF;
-		const int fog_rgb = rand() & 0xFFFFFF;
-		const int f = rand() & 0xFF;
+		const int rgb = my_rand() & 0xFFFFFF;
+		const int fog_rgb = my_rand() & 0xFFFFFF;
+		const int f = my_rand() & 0xFF;
 		const int expected = expected_final_rgb(rgb, f, fog_rgb);
 		q = draw_sprite(q, rgb, f, fog_rgb);
 		q = draw_finish(q);
@@ -209,7 +221,10 @@ int render_test(u32 seed, u32 n_prims)
 			rgb, f, fog_rgb, expected, actual);
 
 		if (expected != actual)
-			break;
+    {
+      free(packet);
+			return -1;
+    }
 	}
 
 	free(packet);
@@ -222,9 +237,18 @@ int main(int argc, char *argv[])
 	
   init_gs();
 
-	render_test(123, __UINT32_MAX__);
+	if (render_test(123, 10000) == 0)
+  {
+    printf("All passed\n");
+    my_draw_clear_send(0xFF00);
+  }
+  else
+  {
+    printf("Test failed\n");
+    my_draw_clear_send(0xFF);
+  }
 
-	SleepThread();
+  SleepThread();
 
 	return 0;
 }
