@@ -14,6 +14,21 @@
 #include <draw.h>
 
 #include "common.h"
+#include "../lib-usb/usb.h"
+#include "../lib-bmp/bmp.h"
+#include "../lib-read-fb/read-fb.h"
+
+#define SAVE_FRAME 0                 // Which frame to save to file
+#define SAVE_FRAME_NAME "frame0.bmp"     // Name of the frame to save
+#define SAVE_FRAME_ADDR (0x800 * 64) // Frame buffer pointer
+#define SAVE_FRAME_WIDTH 512         // Frame buffer width
+#define SAVE_FRAME_HEIGHT 256        // Frame buffer height
+#define SAVE_FRAME_PSM GS_PSM_32
+
+#define DEBUG_FRAME_WIDTH 512
+#define DEBUG_FRAME_HEIGHT 256
+#define DEBUG_WINDOW_X 0
+#define DEBUG_WINDOW_Y 0
 
 // Maximum size of a DMA transfer
 #define TRANSFER_SIZE 0xFFFF
@@ -22,6 +37,10 @@
 #define PRINTF(fmt, ...)
 
 #include "pcsx2_dump_vars.c"
+
+framebuffer_t g_frame; // Frame buffer for debugging
+zbuffer_t g_z;         // Z buffer
+u8 frame_data[4 * SAVE_FRAME_WIDTH * SAVE_FRAME_HEIGHT] __attribute__((aligned(64))); // For reading frame buffer back
 
 extern GRAPH_MODE graph_mode[22]; // For inferring the video mode
 extern u64 smode1_values[22]; // For inferring the video mode
@@ -276,22 +295,12 @@ void exec_gs_dump(s32 loops)
     gs_set_priv_regs(&priv_regs_init, 1, 0);
 
     u32 vsync_n = 0;
-    u32 vsync_need_regs = 1; // Do we need to set the privileged registers for the next Vsync?
   
     wait_for_vsync_field(commands[vsync_pos[0]].field);
 
     // Execute the commands
     for (u32 command_n = 0; command_n < command_count; command_n++)
-    {
-      // wait_for_vsync_field(commands[vsync_pos[vsync_n]].field);
-
-      // Set the registers for the next Vsync
-      // if (vsync_need_regs && vsync_n < vsync_count)
-      // {
-      //   gs_set_priv_regs((priv_regs_out_t*)&command_data[commands[vsync_reg_pos[vsync_n]].command_data_offset], 0);
-      //   vsync_need_regs = 0;
-      // }
-      
+    { 
       command_t* curr_command = &commands[command_n];
 
       switch (curr_command->tag)
@@ -309,10 +318,12 @@ void exec_gs_dump(s32 loops)
           PRINTF("%05d: %d: Vsync: Expected field: %d, Actual field %lld\n",
             command_n, vsync_n, curr_command->field, (*GS_REG_CSR >> 13) & 1);
 
-          // graph_wait_vsync();
+          if (vsync_n == SAVE_FRAME)
+          {
+            return;
+          }
 
           vsync_n++;
-          vsync_need_regs = 1;
 
           break;
         }
@@ -328,12 +339,7 @@ void exec_gs_dump(s32 loops)
         {
           PRINTF("%05d: Registers\n", command_n);
 
-          // Wait for Vsync before swapping buffers (which should be done by the privileged registers)
-          graph_wait_vsync();
-          // Don't set the registers here because they are set at the top of the loop
-
-          u32 output = vsync_n < vsync_count - 1; // no output on the last Vsync
-          gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0, output);
+          gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0, 1);
 
           break;
         }
@@ -342,8 +348,123 @@ void exec_gs_dump(s32 loops)
   }
 }
 
+int graph_initialize_custom()
+{
+	int mode = graph_get_region();
+
+	graph_set_mode(GRAPH_MODE_NONINTERLACED, mode, GRAPH_MODE_FRAME, GRAPH_ENABLE);
+
+	graph_set_screen(0, 0, DEBUG_FRAME_WIDTH, DEBUG_FRAME_HEIGHT);
+
+	graph_set_bgcolor(0, 0, 0);
+
+	graph_set_framebuffer(0, g_frame.address, g_frame.width, g_frame.psm, 0, 0);
+
+	graph_set_output(1, 0, 1, 0, 1, 0xFF);
+
+	return 0;
+}
+
+void init_gs()
+{
+	g_frame.width = DEBUG_FRAME_WIDTH;
+	g_frame.height = DEBUG_FRAME_HEIGHT;
+	g_frame.mask = 0;
+	g_frame.psm = GS_PSM_32;
+	g_frame.address = graph_vram_allocate(DEBUG_FRAME_WIDTH, DEBUG_FRAME_HEIGHT, g_frame.psm, GRAPH_ALIGN_PAGE);
+
+	g_z.enable = DRAW_DISABLE;
+	g_z.mask = 1;
+	g_z.method = ZTEST_METHOD_ALLPASS;
+	g_z.zsm = GS_ZBUF_32;
+	g_z.address = graph_vram_allocate(DEBUG_FRAME_WIDTH, DEBUG_FRAME_HEIGHT, GS_PSMZ_32, GRAPH_ALIGN_PAGE);
+
+	graph_initialize_custom();
+}
+
+qword_t* my_draw_clear(qword_t* q, unsigned rgb)
+{
+	color_t bg_color;
+	bg_color.r = rgb & 0xFF;
+	bg_color.g = (rgb >> 8) & 0xFF;
+	bg_color.b = (rgb >> 16) & 0xFF;
+	bg_color.a = 0x80;
+	bg_color.q = 1.0f;
+
+	PACK_GIFTAG(q, GIF_SET_TAG(6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+	q++;
+	PACK_GIFTAG(q, GIF_SET_PRIM(PRIM_TRIANGLE_STRIP, 0, 0, 0, 0, 0, 0, 0, 0), GIF_REG_PRIM);
+	q++;
+	PACK_GIFTAG(q, bg_color.rgbaq, GIF_REG_RGBAQ);
+	q++;
+	PACK_GIFTAG(q, GIF_SET_XYZ(DEBUG_WINDOW_X << 4, DEBUG_WINDOW_Y << 4, 0), GIF_REG_XYZ2);
+	q++;
+	PACK_GIFTAG(q, GIF_SET_XYZ((DEBUG_WINDOW_X + DEBUG_FRAME_WIDTH) << 4, 0, 0), GIF_REG_XYZ2);
+	q++;
+	PACK_GIFTAG(q, GIF_SET_XYZ(0, (DEBUG_WINDOW_Y + DEBUG_FRAME_HEIGHT) << 4, 0), GIF_REG_XYZ2);
+	q++;
+	PACK_GIFTAG(q, GIF_SET_XYZ((DEBUG_WINDOW_X + DEBUG_FRAME_WIDTH) << 4, (DEBUG_WINDOW_Y + DEBUG_FRAME_HEIGHT) << 4, 0), GIF_REG_XYZ2);
+	q++;
+	return q;
+}
+
+void my_draw_clear_send(unsigned rgb)
+{
+	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 32);
+	qword_t* q = packet;
+	q = my_draw_clear(q, rgb);
+	q = draw_finish(q);
+
+	dma_wait_fast();
+	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+	draw_wait_finish();
+
+	free(packet);
+}
+
+int init_draw()
+{
+	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 1024);
+	qword_t* q;
+
+	q = packet;
+
+	q = draw_setup_environment(q, 0, &g_frame, &g_z);
+
+	q = draw_primitive_xyoffset(q, 0, DEBUG_WINDOW_X, DEBUG_WINDOW_Y);
+
+	q = draw_disable_tests(q, 0, &g_z);
+
+	q = draw_finish(q);
+
+	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+	dma_wait_fast();
+
+	free(packet);
+	return 0;
+}
+
+void save_frame()
+{
+  _gs_glue_read_framebuffer(SAVE_FRAME_ADDR, SAVE_FRAME_WIDTH, SAVE_FRAME_HEIGHT, SAVE_FRAME_PSM, frame_data);
+
+  char filename[64];
+  
+  sprintf(filename, "mass:%s", SAVE_FRAME_NAME);
+
+  if (write_bmp_to_usb(filename, frame_data, SAVE_FRAME_WIDTH, SAVE_FRAME_HEIGHT, SAVE_FRAME_PSM, my_draw_clear_send) != 0)
+  {
+    PRINTF("Failed to write frame data to USB\n");
+  }
+}
+
 int main(int argc, char* argv[])
 {
-  exec_gs_dump(10000);
+  exec_gs_dump(1);
+  init_gs();
+  init_draw();
+  save_frame();
+  SleepThread();
   return 0;
 }
+
