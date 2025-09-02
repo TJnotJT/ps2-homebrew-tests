@@ -41,10 +41,6 @@ zbuffer_t g_z_disabled; // Z buffer
 
 unsigned char z_data[4 * FRAME_HEIGHT * FRAME_WIDTH] __attribute__((aligned(64))); // For reading Z buffer back
 
-#define COLOR_WAIT_USB 0x00FFFF
-#define COLOR_WAIT_USB2 0x00A5FF
-#define COLOR_FAIL 0x0000FF
-#define COLOR_SUCCESS 0x00FF00
 #define COLOR_DONE 0xFFFFFF
 
 #define Z_BIAS 0xffffff00
@@ -207,42 +203,6 @@ int render_test(int window_x, int window_y)
 	free(packet);
 	return 0;
 }
-
-// int write_z_data_to_usb(const char* filename)
-// {
-// 	printf("Waiting for USB to be ready...\n");
-// 	my_draw_clear_send(COLOR_WAIT_USB); // Clear screen to indicate start of USB operation
-
-// 	printf("DEBUG %d\n", __LINE__);
-
-// 	FlushCache(0); // We read data with DMA so flush before writing to USB
-
-// 	reset_iop();
-// 	load_irx_usb();
-
-// 	if (wait_usb_ready() != 0)
-// 	{
-// 		my_draw_clear_send(COLOR_FAIL); // Red background if USB not ready
-// 		printf("USB not ready!\n");
-// 		return -1;
-// 	}
-
-// 	printf("USB is ready, writing %s...\n", filename);
-
-// 	my_draw_clear_send(COLOR_WAIT_USB2);
-
-// 	if (write_bmp(filename, z_data, FRAME_WIDTH, FRAME_HEIGHT, 32) != 0)
-// 	{
-// 		my_draw_clear_send(COLOR_FAIL); // Red background if BMP write failed
-// 		printf("Failed to write %s!\n", filename);
-// 		return -1;
-// 	}
-
-// 	my_draw_clear_send(COLOR_SUCCESS);
-
-// 	printf("Z data written successfully to %s\n", filename);
-// 	return 0;
-// }
 
 int main(int argc, char *argv[])
 {
