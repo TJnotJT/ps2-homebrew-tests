@@ -34,9 +34,7 @@ typedef struct {
 
 int write_bmp(const char* filename, const u8* pixelData, int width, int height, int bitsPerPixel)
 {
-    const int bytesPerPixel = bitsPerPixel / 8;
-
-    u8* pixelDataBGR = (u8*)aligned_alloc(64, width * height * bytesPerPixel);
+    u8* pixelDataBGR = (u8*)aligned_alloc(64, width * height * 4);
 
     if (!pixelDataBGR) {
         printf("Memory allocation failed\n");
@@ -46,14 +44,20 @@ int write_bmp(const char* filename, const u8* pixelData, int width, int height, 
     // Convert to BGR format
     for (int i = 0; i < width * height; i++) {
         if (bitsPerPixel == 24) {
-            pixelDataBGR[i * 3 + 0] = pixelData[i * 3 + 2]; // B
-            pixelDataBGR[i * 3 + 1] = pixelData[i * 3 + 1]; // G
-            pixelDataBGR[i * 3 + 2] = pixelData[i * 3 + 0]; // R
+            pixelDataBGR[i * 4 + 0] = pixelData[i * 3 + 2]; // B
+            pixelDataBGR[i * 4 + 1] = pixelData[i * 3 + 1]; // G
+            pixelDataBGR[i * 4 + 2] = pixelData[i * 3 + 0]; // R
+            pixelDataBGR[i * 4 + 3] = 255;                  // A (not used in 24-bit)
         } else if (bitsPerPixel == 32) {
             pixelDataBGR[i * 4 + 0] = pixelData[i * 4 + 2]; // B
             pixelDataBGR[i * 4 + 1] = pixelData[i * 4 + 1]; // G
             pixelDataBGR[i * 4 + 2] = pixelData[i * 4 + 0]; // R
             pixelDataBGR[i * 4 + 3] = pixelData[i * 4 + 3]; // A (Alpha, if present)
+        } else if (bitsPerPixel == 16) {
+            pixelDataBGR[i * 4 + 0] = ((int)pixelData[i * 2 + 1] << 1) & 0xF8;
+            pixelDataBGR[i * 4 + 1] = ((((int)pixelData[i * 2 + 0]) >> 2) & 0x38) | (((int)pixelData[i * 2 + 1] << 6) & 0xC0);
+            pixelDataBGR[i * 4 + 2] = (((int)pixelData[i * 2 + 0]) << 3) & 0xF8;
+            pixelDataBGR[i * 4 + 3] = ((int)pixelData[i * 2 + 1]) & 0x80;
         } else {
             printf("Unsupported bits per pixel: %d\n", bitsPerPixel);
             free(pixelDataBGR);
@@ -62,7 +66,7 @@ int write_bmp(const char* filename, const u8* pixelData, int width, int height, 
     }
 
     // Calculate row padding
-    const int rowSizeWithoutPadding = width * bytesPerPixel;
+    const int rowSizeWithoutPadding = width * 4;
     const int paddedRowSize = (rowSizeWithoutPadding + 3) & (~3); // Ensure multiple of 4 bytes
 
     const int pixelDataSize = paddedRowSize * height;
@@ -81,7 +85,7 @@ int write_bmp(const char* filename, const u8* pixelData, int width, int height, 
     infoHeader.biWidth = width;
     infoHeader.biHeight = height;
     infoHeader.biPlanes = 1;
-    infoHeader.biBitCount = bitsPerPixel;
+    infoHeader.biBitCount = 32;
     infoHeader.biCompression = 0; // No compression
     infoHeader.biSizeImage = pixelDataSize;
     infoHeader.biXPelsPerMeter = 0; // Not critical for basic BMP
