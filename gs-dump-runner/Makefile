@@ -9,11 +9,11 @@
 include ../Makefile.destdir
 
 EE_CFLAGS += -fno-builtin-printf
-EE_LIBS = -ldraw -lgraph -lmath3d -lpacket -ldma
+EE_LIBS = -lkernel -ldraw -lpatches -lgraph -lmath3d -ldma
 
 all: runner.elf
 
-runner.elf: my_read.o pcsx2_dump.o main.o 
+runner.elf: my_read.o pcsx2_dump.o main.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	# $(EE_STRIP) --strip-all $@
