@@ -18,12 +18,12 @@
 #include "../lib-bmp/bmp.h"
 #include "../lib-read-fb/read-fb.h"
 
-#define SAVE_FRAME 0                 // Which frame to save to file
-#define SAVE_FRAME_NAME "frame0.bmp"     // Name of the frame to save
-#define SAVE_FRAME_ADDR (0x800 * 64) // Frame buffer pointer
+#define SAVE_FRAME 3                 // Which frame to save to file
+#define SAVE_FRAME_NAME "frame3_counter.bmp"     // Name of the frame to save
+#define SAVE_FRAME_ADDR (0x0 * 64) // Frame buffer pointer
 #define SAVE_FRAME_WIDTH 512         // Frame buffer width
-#define SAVE_FRAME_HEIGHT 256        // Frame buffer height
-#define SAVE_FRAME_PSM GS_PSM_32
+#define SAVE_FRAME_HEIGHT 512        // Frame buffer height
+#define SAVE_FRAME_PSM GS_PSM_16S
 
 #define DEBUG_FRAME_WIDTH 512
 #define DEBUG_FRAME_HEIGHT 256
@@ -33,8 +33,8 @@
 // Maximum size of a DMA transfer
 #define TRANSFER_SIZE 0xFFFF
 
-// #define PRINTF(fmt, ...) printf(fmt, ##__VA_ARGS__)
-#define PRINTF(fmt, ...)
+#define PRINTF(fmt, ...) printf(fmt, ##__VA_ARGS__)
+// #define PRINTF(fmt, ...)
 
 #include "pcsx2_dump_vars.c"
 
@@ -108,9 +108,7 @@ int graph_set_mode_custom(int interlace, int mode, int ffmd)
   return 0;
 }
 
-u64 pmode_cached = 0;
-
-void gs_set_priv_regs(priv_regs_out_t* data, u32 init, u32 enable_output)
+void gs_set_priv_regs(priv_regs_out_t* data, u32 init)
 {
   assert((u32)data % 16 == 0);
 
@@ -126,31 +124,21 @@ void gs_set_priv_regs(priv_regs_out_t* data, u32 init, u32 enable_output)
 
     u32 interlace = !!(data->SMODE2 & 1);
     u32 ffmd = !!(data->SMODE2 & 2);
+    PRINTF("Setting mode: %d\n", mode);
+    PRINTF("Setting interlace: %d\n", interlace);
+    PRINTF("Setting ffmd: %d\n", ffmd);
     graph_set_mode_custom(interlace, mode, ffmd);
 
-    // FIXME: Should these be set?
-    // *GS_REG_SYNCHV = data->SYNCV;
-    // *GS_REG_SYNCH2 = data->SYNCH2;
-    // *GS_REG_SYNCH1 = data->SYNCH1;
-    // *GS_REG_SRFSH = data->SRFSH;
-
+    // Note: Should these be set?
+    *GS_REG_SYNCHV = data->SYNCV;
+    *GS_REG_SYNCH2 = data->SYNCH2;
+    *GS_REG_SYNCH1 = data->SYNCH1;
+    *GS_REG_SRFSH = data->SRFSH;
     *GS_REG_SMODE2 = data->SMODE2;
-
-    // *GS_REG_PMODE = pmode_cached;
-    pmode_cached = data->PMODE;
-
-    // FIXME: Should this be set or enough to call graph_set_mode_custom?
-    // *GS_REG_SMODE1 = register_buffer.SMODE1;
+    *GS_REG_SMODE1 = data->SMODE1;
   }
 
-  if (enable_output)
-  {
-    *GS_REG_PMODE = pmode_cached;
-  }
-  else
-  {
-    *GS_REG_PMODE = pmode_cached & ~3;
-  }
+  *GS_REG_PMODE = data->PMODE;
 
   // CSR and IMR should not be set here
   // They are only used for interrupts, which are not need for the dump
@@ -261,46 +249,30 @@ void gs_set_general_regs(general_regs_t* data)
   free(reg_packet);
 }
 
-void wait_for_vsync_field(u32 field)
-{
-  int timeout = 0;
-  while (((*GS_REG_CSR >> 13) & 1) != field)
-  {
-    if (timeout % 1000000 == 0)
-      PRINTF("Waiting for correct field %d\n", field);
-    timeout++;
-  }
-  if (timeout > 0)
-  {
-    PRINTF("Field timeout: %d\n", timeout);
-  }
-}
-
 void exec_gs_dump(s32 loops)
 {
   PRINTF("Executing GS dump\n");
 
   if (loops < 0)
-    loops = 0x7FFFFFFF;
+    loops = __INT_MAX__;
 
   while (loops-- != 0)
   {
-    PRINTF("Loop %d\n", loops);
+    PRINTF("Loop: %d\n", loops);
 
     dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
     dma_channel_fast_waits(DMA_CHANNEL_GIF);
 
+    // Must set privileged registers first because it resets the GS.
+    gs_set_priv_regs(&priv_regs_init, 1);
     gs_set_memory(memory_init);
     gs_set_general_regs(&general_regs_init);
-    gs_set_priv_regs(&priv_regs_init, 1, 0);
 
     u32 vsync_n = 0;
-  
-    wait_for_vsync_field(commands[vsync_pos[0]].field);
 
     // Execute the commands
     for (u32 command_n = 0; command_n < command_count; command_n++)
-    { 
+    {
       command_t* curr_command = &commands[command_n];
 
       switch (curr_command->tag)
@@ -308,15 +280,12 @@ void exec_gs_dump(s32 loops)
         case GS_DUMP_TRANSFER:
         {
           gs_transfer(&command_data[curr_command->command_data_offset], curr_command->size);
-
           break;
         }
 
         case GS_DUMP_VSYNC:
         {
-          
-          PRINTF("%05d: %d: Vsync: Expected field: %d, Actual field %lld\n",
-            command_n, vsync_n, curr_command->field, (*GS_REG_CSR >> 13) & 1);
+          PRINTF("%05d: %d: Vsync\n", command_n, vsync_n);
 
           if (vsync_n == SAVE_FRAME)
           {
@@ -339,7 +308,7 @@ void exec_gs_dump(s32 loops)
         {
           PRINTF("%05d: Registers\n", command_n);
 
-          gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0, 1);
+          gs_set_priv_regs((priv_regs_out_t*)&command_data[curr_command->command_data_offset], 0);
 
           break;
         }
@@ -460,7 +429,7 @@ void save_frame()
 
 int main(int argc, char* argv[])
 {
-  exec_gs_dump(1);
+  exec_gs_dump(99999);
   init_gs();
   init_draw();
   save_frame();
