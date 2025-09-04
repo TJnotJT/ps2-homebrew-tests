@@ -89,7 +89,7 @@ void gs_glue_read_fifo(u32 QWtotal, u128* data)
 }
 
 // Taken from gs4ps2.c (https://github.com/F0bes/gs4ps2)
-void _gs_glue_read_framebuffer(u32 address, u32 width, u32 height, u32 psm, void* out_data)
+void _gs_glue_read_framebuffer(u32 address, u32 bw, u32 x, u32 y, u32 width, u32 height, u32 psm, void* out_data)
 {
 	*GS_REG_CSR = 2; // Clear any previous FINISH events
 
@@ -99,9 +99,9 @@ void _gs_glue_read_framebuffer(u32 address, u32 width, u32 height, u32 psm, void
 	q++;
 	PACK_GIFTAG(q, GS_SET_FINISH(1), GS_REG_FINISH);
 	q++;
-	PACK_GIFTAG(q, GS_SET_BITBLTBUF(address >> 6, width >> 6, psm, 0, 0, 0), GS_REG_BITBLTBUF);
+	PACK_GIFTAG(q, GS_SET_BITBLTBUF(address >> 6, bw, psm, 0, 0, 0), GS_REG_BITBLTBUF);
 	q++;
-	PACK_GIFTAG(q, GS_SET_TRXPOS(0, 0, 0, 0, 0), GS_REG_TRXPOS);
+	PACK_GIFTAG(q, GS_SET_TRXPOS(x, y, 0, 0, 0), GS_REG_TRXPOS);
 	q++;
 	PACK_GIFTAG(q, GS_SET_TRXREG(width, height), GS_REG_TRXREG);
 	q++;
