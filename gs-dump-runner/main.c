@@ -634,7 +634,7 @@ int init_draw()
 	return 0;
 }
 
-void save_frame()
+void save_image()
 {
   _gs_glue_read_framebuffer(SAVE_FRAME_ADDR, SAVE_FRAME_WIDTH, SAVE_FRAME_HEIGHT, SAVE_FRAME_PSM, frame_data);
 
@@ -656,7 +656,7 @@ int main(int argc, char* argv[])
   read_gs_dump(pcsx2_dump, pcsx2_dump + size_pcsx2_dump, 10000);
 	init_gs();
   init_draw();
-  save_frame();
+  save_image();
   SleepThread();
   return 0;
 }
