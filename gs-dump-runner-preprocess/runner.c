@@ -18,12 +18,20 @@
 #include "../lib-bmp/bmp.h"
 #include "../lib-read-fb/read-fb.h"
 
-#define SAVE_FRAME 3                 // Which frame to save to file
-#define SAVE_FRAME_NAME "frame3_counter.bmp"     // Name of the frame to save
-#define SAVE_FRAME_ADDR (0x0 * 64) // Frame buffer pointer
-#define SAVE_FRAME_WIDTH 512         // Frame buffer width
-#define SAVE_FRAME_HEIGHT 512        // Frame buffer height
-#define SAVE_FRAME_PSM GS_PSM_16S
+
+// 0 for none, 1 for frame, or 2 for for transfer
+#define SAVE_MODE 2
+#define SAVE_MODE_NONE 0
+#define SAVE_MODE_FRAME 1
+#define SAVE_MODE_XFER 2
+
+#define SAVE_NUM 13                 // Which frame/draw to save to file
+#define SAVE_FILE_NAME "draw3_bge_tex.bmp"     // Name of the file to save
+#define SAVE_VRAM_ADDR (0x2d00 * 64) // Pointer to GS memory to save
+#define SAVE_BW 1         // Buffer width (/64)
+#define SAVE_WIDTH 16         // Width of region to save
+#define SAVE_HEIGHT 16        // Height of region to save
+#define SAVE_PSM GS_PSM_32     // PSM of region to save
 
 #define DEBUG_FRAME_WIDTH 512
 #define DEBUG_FRAME_HEIGHT 256
@@ -40,7 +48,7 @@
 
 framebuffer_t g_frame; // Frame buffer for debugging
 zbuffer_t g_z;         // Z buffer
-u8 frame_data[4 * SAVE_FRAME_WIDTH * SAVE_FRAME_HEIGHT] __attribute__((aligned(64))); // For reading frame buffer back
+u8 image_data[4 * SAVE_WIDTH * SAVE_HEIGHT] __attribute__((aligned(64))); // For reading frame buffer back
 
 extern GRAPH_MODE graph_mode[22]; // For inferring the video mode
 extern u64 smode1_values[22]; // For inferring the video mode
@@ -280,6 +288,11 @@ void exec_gs_dump(s32 loops)
         case GS_DUMP_TRANSFER:
         {
           gs_transfer(&command_data[curr_command->command_data_offset], curr_command->size);
+
+          if (SAVE_MODE == SAVE_MODE_XFER && command_n == SAVE_NUM)
+          {
+            return;
+          }
           break;
         }
 
@@ -287,7 +300,7 @@ void exec_gs_dump(s32 loops)
         {
           PRINTF("%05d: %d: Vsync\n", command_n, vsync_n);
 
-          if (vsync_n == SAVE_FRAME)
+          if (SAVE_MODE == SAVE_MODE_FRAME && vsync_n == SAVE_NUM)
           {
             return;
           }
@@ -413,15 +426,15 @@ int init_draw()
 	return 0;
 }
 
-void save_frame()
+void save_image()
 {
-  _gs_glue_read_framebuffer(SAVE_FRAME_ADDR, SAVE_FRAME_WIDTH, SAVE_FRAME_HEIGHT, SAVE_FRAME_PSM, frame_data);
+  _gs_glue_read_framebuffer(SAVE_VRAM_ADDR, SAVE_BW, 0, 0, SAVE_WIDTH, SAVE_HEIGHT, SAVE_PSM, image_data);
 
   char filename[64];
   
-  sprintf(filename, "mass:%s", SAVE_FRAME_NAME);
+  sprintf(filename, "mass:%s", SAVE_FILE_NAME);
 
-  if (write_bmp_to_usb(filename, frame_data, SAVE_FRAME_WIDTH, SAVE_FRAME_HEIGHT, SAVE_FRAME_PSM, my_draw_clear_send) != 0)
+  if (write_bmp_to_usb(filename, image_data, SAVE_WIDTH, SAVE_HEIGHT, SAVE_PSM, my_draw_clear_send) != 0)
   {
     PRINTF("Failed to write frame data to USB\n");
   }
@@ -432,7 +445,7 @@ int main(int argc, char* argv[])
   exec_gs_dump(99999);
   init_gs();
   init_draw();
-  save_frame();
+  save_image();
   SleepThread();
   return 0;
 }
