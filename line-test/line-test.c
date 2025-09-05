@@ -425,7 +425,7 @@ int main(int argc, char *argv[])
 
 	render_test();
 
-	// _gs_glue_read_framebuffer(g_frame.address, FRAME_WIDTH, FRAME_HEIGHT, GS_PSM_32, frame_data);
+	// read_framebuffer(g_frame.address, FRAME_WIDTH, FRAME_HEIGHT, GS_PSM_32, frame_data);
 
 	// write_bmp_to_usb("mass:frame.bmp", frame_data, FRAME_WIDTH, FRAME_HEIGHT, GS_PSM_32, render_debug);
 

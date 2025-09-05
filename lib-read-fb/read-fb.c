@@ -89,7 +89,7 @@ void gs_glue_read_fifo(u32 QWtotal, u128* data)
 }
 
 // Taken from gs4ps2.c (https://github.com/F0bes/gs4ps2)
-void _gs_glue_read_framebuffer(u32 address, u32 bw, u32 x, u32 y, u32 width, u32 height, u32 psm, void* out_data)
+void read_framebuffer(u32 address, u32 bw, u32 x, u32 y, u32 width, u32 height, u32 psm, void* out_data)
 {
 	*GS_REG_CSR = 2; // Clear any previous FINISH events
 

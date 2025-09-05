@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
 
 	render_test(123);
 
-	_gs_glue_read_framebuffer(g_frame.address, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
+	read_framebuffer(g_frame.address, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
 	char filename[64];
 	sprintf(filename, "mass:fog_data.bmp");

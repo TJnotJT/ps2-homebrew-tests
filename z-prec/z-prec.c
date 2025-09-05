@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
 
 		render_test(i * 1024, 0);
 
-		_gs_glue_read_framebuffer(g_z_enabled.address, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, z_data);
+		read_framebuffer(g_z_enabled.address, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, z_data);
 
 		// Set the framebuffer back to the main frame buffer
 		graph_set_framebuffer(0, g_frame.address, g_frame.width, g_frame.psm, 0, 0);

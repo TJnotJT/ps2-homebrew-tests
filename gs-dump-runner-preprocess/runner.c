@@ -428,7 +428,7 @@ int init_draw()
 
 void save_image()
 {
-  _gs_glue_read_framebuffer(SAVE_VRAM_ADDR, SAVE_BW, 0, 0, SAVE_WIDTH, SAVE_HEIGHT, SAVE_PSM, image_data);
+  read_framebuffer(SAVE_VRAM_ADDR, SAVE_BW, 0, 0, SAVE_WIDTH, SAVE_HEIGHT, SAVE_PSM, image_data);
 
   char filename[64];
   

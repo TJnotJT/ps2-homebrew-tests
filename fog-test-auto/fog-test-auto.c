@@ -210,7 +210,7 @@ int render_test(u32 seed, u32 n_prims)
 		dma_channel_wait(DMA_CHANNEL_GIF, 0);
 		draw_wait_finish();
 
-		_gs_glue_read_framebuffer(g_frame.address, g_frame.width, g_frame.height, g_frame.psm, g_frame_data);
+		read_framebuffer(g_frame.address, g_frame.width, g_frame.height, g_frame.psm, g_frame_data);
 
 		// Take just the first pixel; they should all be the same.
 		const int actual = (g_frame_data[0] << 0) | (g_frame_data[1] << 8) | (g_frame_data[2] << 16);

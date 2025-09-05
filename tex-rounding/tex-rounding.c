@@ -283,7 +283,7 @@ int render_test()
 
 void save_image()
 {
-  _gs_glue_read_framebuffer(g_frame.address, g_frame.width / 64, 0, 0, 2 * TEX_WIDTH, 2 * TEX_HEIGHT, g_frame.psm, g_frame_data);
+  read_framebuffer(g_frame.address, g_frame.width / 64, 0, 0, 2 * TEX_WIDTH, 2 * TEX_HEIGHT, g_frame.psm, g_frame_data);
 
   char filename[64];
   
