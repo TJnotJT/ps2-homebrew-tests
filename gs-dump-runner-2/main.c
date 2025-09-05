@@ -4,6 +4,7 @@
 #include <tamtypes.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <gif_tags.h>
 #include <gs_psm.h>
 #include <gs_privileged.h>
@@ -25,12 +26,9 @@
 #error "READ_MODE must be defined as READ_USB or READ_MEM"
 #endif
 
-#define SAVE_FRAME 3                 // Which frame to save to file
-#define SAVE_FRAME_NAME "frame3_counter.bmp"     // Name of the frame to save
-#define SAVE_FRAME_ADDR (0x0 * 64) // Frame buffer pointer
-#define SAVE_FRAME_WIDTH 512         // Frame buffer width
-#define SAVE_FRAME_HEIGHT 512        // Frame buffer height
-#define SAVE_FRAME_PSM GS_PSM_16S
+#define SAVE_MODE_DISABLE 0
+#define SAVE_MODE_VSYNC 1
+#define SAVE_MODE_TRANSFER 2
 
 #define DEBUG_FRAME_WIDTH 512
 #define DEBUG_FRAME_HEIGHT 256
@@ -43,7 +41,7 @@
 
 framebuffer_t g_frame; // Frame buffer for debugging
 zbuffer_t g_z;         // Z buffer
-u8 frame_data[4 * SAVE_FRAME_WIDTH * SAVE_FRAME_HEIGHT] __attribute__((aligned(64))); // For reading frame buffer back
+u8 frame_data[4 * 1024 * 1024] __attribute__((aligned(64))); // For reading frame buffer back
 
 typedef struct {
   u64 RC : 3;
@@ -87,6 +85,18 @@ extern u8 pcsx2_dump[] __attribute__((aligned(16)));
 u8* pcsx2_dump_ptr = NULL;
 #endif
 
+char filename_dump[64]; // The filename to read the dump from
+u32 save_mode; // To indicate saving by vsync number or transfer number.
+u32 save_num; // The vsync number or transfer number to save.
+u32 save_bw; // The buffer width for saving.
+u32 save_psm; // The pixel storage mode of the buffer for saving.
+u32 save_block; // The vram block of the buffer for saving (word address / 64).
+u32 save_x; // The x coordinate within the buffer to save.
+u32 save_y; // The y coordinate within the buffer to save.
+u32 save_width; // The width of the region to save.
+u32 save_height; // The height of the region to save.
+char filename_save[64]; // The filename to save to.
+
 void fail()
 {
 	PRINTF("Failed\n");
@@ -110,7 +120,9 @@ int my_read_init()
 	}
 	else
 	{
-		pcsx2_dump_file = fopen("mass:pcsx2_dump.gs", "r");
+		char filename[128];
+		sprintf(filename, "mass:%s", filename_dump);
+		pcsx2_dump_file = fopen(filename, "r");
 		if (!pcsx2_dump_file)
 		{
 			PRINTF("Failed to open pcsx2_dump.gs\n");
@@ -609,8 +621,8 @@ void run_gs_dump(u32 loops)
         }
         case GS_DUMP_VSYNC:
         {
-					
-					if (vsync == SAVE_FRAME)
+
+					if (vsync == save_num)
 					{
 						return;
 					}
@@ -746,16 +758,241 @@ int init_draw()
 
 void save_image()
 {
-  read_framebuffer(SAVE_FRAME_ADDR, SAVE_FRAME_WIDTH / 64, 0, 0, SAVE_FRAME_WIDTH, SAVE_FRAME_HEIGHT, SAVE_FRAME_PSM, frame_data);
+  read_framebuffer(save_block * 64, save_bw, 0, 0, save_width, save_height, save_psm, frame_data);
 
-  char filename[64];
-  
-  sprintf(filename, "mass:%s", SAVE_FRAME_NAME);
+  char filename[128];
 
-  if (write_bmp_to_usb(filename, frame_data, SAVE_FRAME_WIDTH, SAVE_FRAME_HEIGHT, SAVE_FRAME_PSM, my_draw_clear_send) != 0)
+  sprintf(filename, "mass:%s", filename_save);
+
+  if (write_bmp_to_usb(filename, frame_data, save_width, save_height, save_psm, my_draw_clear_send) != 0)
   {
     PRINTF("Failed to write frame data to USB\n");
   }
+}
+
+void settings_read_word(const char** buffer_in, char* buffer_out, const char* buffer_out_end)
+{
+	while (**buffer_in && isspace((int)**buffer_in))
+		(*buffer_in)++;
+	while ((isalnum((int)**buffer_in) || **buffer_in == '_') && buffer_out < buffer_out_end - 1)
+		*buffer_out++ = *(*buffer_in)++;
+	*buffer_out = '\0';
+}
+
+void settings_read_word_filename(const char** buffer_in, char* buffer_out, const char* buffer_out_end)
+{
+	while (**buffer_in && isspace((int)**buffer_in))
+		(*buffer_in)++;
+	while ((isalnum((int)**buffer_in) || **buffer_in == '_' || **buffer_in == '-' || **buffer_in == '.') &&
+			buffer_out < buffer_out_end - 1)
+		*buffer_out++ = *(*buffer_in)++;
+	*buffer_out = '\0';
+}
+
+void settings_read_key(const char** buffer_in, char* buffer_out, const char* buffer_out_end)
+{
+	settings_read_word(buffer_in, buffer_out, buffer_out_end);
+	if (**buffer_in == ':')
+		(*buffer_in)++;
+}
+
+void settings_read_mode(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_mode = SAVE_MODE_DISABLE; // Default
+	if (strncmp(buffer, "disable", 8) == 0)
+		save_mode = SAVE_MODE_DISABLE;
+	else if (strcmp(buffer, "vsync") == 0)
+		save_mode = SAVE_MODE_VSYNC;
+	else if (strcmp(buffer, "transfer") == 0)
+		save_mode = SAVE_MODE_TRANSFER;
+	else
+		PRINTF("Unknown mode: %s\n", buffer);
+	PRINTF("Set mode to %d\n", save_mode);
+}
+
+void settings_read_num(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_num = strtoul(buffer, NULL, 0);
+	PRINTF("Set num to %d\n", save_num);
+}
+
+void settings_read_bw(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_bw = strtoul(buffer, NULL, 0);
+	PRINTF("Set bw to %d\n", save_bw);
+}
+
+void settings_read_bwpx(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_bw = strtoul(buffer, NULL, 0) / 64;
+	PRINTF("Set bw to %d\n", save_bw);
+}
+
+void settings_read_psm(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+
+	save_psm = GS_PSM_32; // Default
+	if (strncmp(buffer, "PSM_32", sizeof(buffer)) == 0)
+		save_psm = GS_PSM_32;
+	else if (strncmp(buffer, "PSM_24", sizeof(buffer)) == 0)
+		save_psm = GS_PSM_24;
+	else if (strncmp(buffer, "PSM_16", sizeof(buffer)) == 0)
+		save_psm = GS_PSM_16;
+	else if (strncmp(buffer, "PSM_16S", sizeof(buffer)) == 0)
+		save_psm = GS_PSM_16S;
+	else if (strncmp(buffer, "PSMZ_32", sizeof(buffer)) == 0)
+		save_psm = GS_PSMZ_32;
+	else if (strncmp(buffer, "PSMZ_24", sizeof(buffer)) == 0)
+		save_psm = GS_PSMZ_24;
+	else if (strncmp(buffer, "PSMZ_16", sizeof(buffer)) == 0)
+		save_psm = GS_PSMZ_16;
+	else if (strncmp(buffer, "PSMZ_16S", sizeof(buffer)) == 0)
+		save_psm = GS_PSMZ_16S;
+	else
+		PRINTF("Unknown psm: %s\n", buffer);
+
+	PRINTF("Set psm to 0x%x\n", save_psm);
+}
+
+void settings_read_block(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_block = strtoul(buffer, NULL, 0);
+	PRINTF("Set block to 0x%x\n", save_block);
+}
+
+void settings_read_x(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_x = strtoul(buffer, NULL, 0);
+	PRINTF("Set x to %d\n", save_x);
+}
+
+void settings_read_y(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_y = strtoul(buffer, NULL, 0);
+	PRINTF("Set y to %d\n", save_y);
+}
+
+void settings_read_width(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_width = strtoul(buffer, NULL, 0);
+	PRINTF("Set width to %d\n", save_width);
+}
+
+void settings_read_height(const char** buffer_in)
+{
+	char buffer[16];
+	settings_read_word(buffer_in, buffer, buffer + sizeof(buffer));
+	save_height = strtoul(buffer, NULL, 0);
+	PRINTF("Set height to %d\n", save_height);
+}
+
+void settings_read_filename_dump(const char** buffer_in)
+{
+	settings_read_word_filename(buffer_in, filename_dump, filename_dump + sizeof(filename_dump));
+	PRINTF("Set dump filename to \"%s\"\n", filename_dump);
+}
+
+void settings_read_filename_save(const char** buffer_in)
+{
+	settings_read_word_filename(buffer_in, filename_save, filename_save + sizeof(filename_save));
+	PRINTF("Set save filename to \"%s\"\n", filename_save);
+}
+
+int settings_parse()
+{
+#if PCSX2
+	FILE* f0 = fopen("mass:gs-dump-runner-2.txt", "w");
+	if (!f0)
+	{
+		PRINTF("Failed to open gs-dump-runner-2.txt\n");
+		fail();
+		return -1;
+	}
+	fprintf(f0, "mode: vsync\n");
+	fprintf(f0, "num: 3\n");
+	fprintf(f0, "bwpx: 640\n");
+	fprintf(f0, "psm: PSM_32\n");
+	fprintf(f0, "block: 0\n");
+	fprintf(f0, "x: 0\n");
+	fprintf(f0, "y: 0\n");
+	fprintf(f0, "width: 640\n");
+	fprintf(f0, "height: 480\n");
+	fprintf(f0, "filename_dump: wakeboarding.gs\n");
+	fprintf(f0, "filename_save: wakeboarding_frame_1.bmp\n");
+	fclose(f0);
+#endif
+
+	FILE* f = fopen("mass:gs-dump-runner-2.txt", "r");
+	if (!f)
+	{
+		PRINTF("Failed to open gs-dump-runner-2.txt\n");
+		fail();
+		return -1;
+	}
+
+	while (!feof(f))
+	{
+		char line[128];
+		if (fgets(line, sizeof(line), f) == NULL)
+		{
+			if (feof(f))
+				break;
+			PRINTF("Failed to read line from gs-dump-runner-2.txt\n");
+			fail();
+			return -1;
+		}
+		const char* p = line;
+		char key[32];
+		settings_read_key(&p, key, key + sizeof(key));
+		if (strcmp(key, "mode") == 0)
+			settings_read_mode(&p);
+		else if (strcmp(key, "num") == 0)
+			settings_read_num(&p);
+		else if (strcmp(key, "bw") == 0)
+			settings_read_bw(&p);
+		else if (strcmp(key, "bwpx") == 0)
+			settings_read_bwpx(&p);
+		else if (strcmp(key, "psm") == 0)
+			settings_read_psm(&p);
+		else if (strcmp(key, "block") == 0)
+			settings_read_block(&p);
+		else if (strcmp(key, "x") == 0)
+			settings_read_x(&p);
+		else if (strcmp(key, "y") == 0)
+			settings_read_y(&p);
+		else if (strcmp(key, "width") == 0)
+			settings_read_width(&p);
+		else if (strcmp(key, "height") == 0)
+			settings_read_height(&p);
+		else if (strcmp(key, "filename_dump") == 0)
+			settings_read_filename_dump(&p);
+		else if (strcmp(key, "filename_save") == 0)
+			settings_read_filename_save(&p);
+		else
+			PRINTF("Unknown key: %s\n", key);
+	}
+
+	PRINTF("Finished parsing settings\n");
+
+	return 0;
 }
 
 int main(int argc, char* argv[])
@@ -768,6 +1005,7 @@ int main(int argc, char* argv[])
 		fail();
 		return -1;
 	}
+	settings_parse();
   run_gs_dump(10000);
 	my_read_close();
 	init_gs();
