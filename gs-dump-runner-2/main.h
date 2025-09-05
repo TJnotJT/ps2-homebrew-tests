@@ -3,10 +3,8 @@
 
 #include <tamtypes.h> // u8, u32, u64
 
-#define REGISTERS_SIZE 8192
-#define COMMAND_BUFFER_SIZE 8192
-#define STATE_SIZE 0x401000
-
+#define GS_REGISTERS_SIZE 8192
+#define GS_STATE_SIZE 0x401000
 typedef struct
 {
   u32 old;
@@ -43,16 +41,7 @@ typedef struct
   const u8* data;
 } gs_dump_command_t;
 
-typedef struct
-{
-	gs_dump_header_t header;
-  
-  u8* registers;
-  gs_dump_command_t commands[COMMAND_BUFFER_SIZE];
-  u32 command_count;
-} gs_dump_t;
-
-extern u8 gs_dump_state[0x401000] __attribute((aligned(16)));
+extern u8 gs_dump_state[GS_STATE_SIZE] __attribute((aligned(16)));
 
 typedef struct
 {

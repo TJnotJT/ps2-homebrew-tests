@@ -80,8 +80,15 @@ void load_irx_usb()
 #define COLOR_SUCCESS 0x00FF00
 #define COLOR_DONE 0xFFFFFF
 
-int write_bmp_to_usb(const char* filename, const u8* data, u32 width, u32 height, u32 psm, void (*set_debug_color)(u32 color))
+u32 init_usb_done = 0;
+
+int init_usb(void (*set_debug_color)(u32 color))
 {
+	// Warning: reinitializing USB after it has been used once may not work.
+	// Might be a timing issue or something else.
+	if (init_usb_done)
+		return 0;
+
 	printf("Waiting for USB to be ready...\n");
 	if (set_debug_color)
 		set_debug_color(COLOR_WAIT_USB); // Clear screen to indicate start of USB operation
@@ -99,7 +106,17 @@ int write_bmp_to_usb(const char* filename, const u8* data, u32 width, u32 height
 		return -1;
 	}
 
-	printf("USB is ready, writing %s...\n", filename);
+	printf("USB is ready\n");
+	init_usb_done = 1;
+	return 0;
+}
+
+int write_bmp_to_usb(const char* filename, const u8* data, u32 width, u32 height, u32 psm, void (*set_debug_color)(u32 color))
+{
+	if (init_usb(set_debug_color) != 0)
+		return -1;
+
+	printf("Writing %s...\n", filename);
 
 	if (set_debug_color)
 		set_debug_color(COLOR_WAIT_USB2);

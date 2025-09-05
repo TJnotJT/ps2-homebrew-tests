@@ -4,7 +4,6 @@
 #include <tamtypes.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include <gif_tags.h>
 #include <gs_psm.h>
 #include <gs_privileged.h>
@@ -14,12 +13,17 @@
 #include <draw.h>
 
 #include "main.h"
-#include "my_read.h"
 #include "swizzle.h"
 
 #include "../lib-usb/usb.h"
 #include "../lib-bmp/bmp.h"
 #include "../lib-read-fb/read-fb.h"
+
+#define READ_USB 1
+#define READ_MEM 2
+#ifndef READ_MODE
+#error "READ_MODE must be defined as READ_USB or READ_MEM"
+#endif
 
 #define SAVE_FRAME 3                 // Which frame to save to file
 #define SAVE_FRAME_NAME "frame3_counter.bmp"     // Name of the frame to save
@@ -65,7 +69,9 @@ typedef struct {
   u64 VHP : 2;
 } SMODE1_t;
 
-gs_dump_t dump __attribute__((aligned(16))); // For storing the GS dump
+// gs_dump_t dump __attribute__((aligned(16))); // For storing the GS dump
+
+gs_dump_header_t gs_dump_header;
 qword_t transfer_buffer[TRANSFER_SIZE] __attribute__((aligned(16))); // For transferring GS packets with qword alignment
 gs_registers_t register_buffer __attribute__((aligned(16))); // For transferring GS privileged registers with qword alignment
 u8 gs_dump_state[0x401000] __attribute__((aligned(16)));
@@ -73,15 +79,180 @@ u8 gs_dump_state[0x401000] __attribute__((aligned(16)));
 extern GRAPH_MODE graph_mode[22]; // For inferring the video mode
 extern u64 smode1_values[22]; // For inferring the video mode
 
-void gs_transfer(u8* packet, u32 size)
+#if READ_MODE == READ_USB
+FILE* pcsx2_dump_file = NULL;
+#elif READ_MODE == READ_MEM
+extern u32 size_pcsx2_dump;
+extern u8 pcsx2_dump[] __attribute__((aligned(16)));
+u8* pcsx2_dump_ptr = NULL;
+#endif
+
+void fail()
 {
-  assert(size % 16 == 0);
+	PRINTF("Failed\n");
+	while (1)
+		SleepThread();
+}
+
+int my_read_init()
+{
+#if READ_MODE == READ_USB
+	if (pcsx2_dump_file)
+	{
+		if (fseek(pcsx2_dump_file, 0, SEEK_SET) != 0)
+		{
+			PRINTF("Failed to seek to start of pcsx2_dump.gs\n");
+			fail();
+			return -1;
+		}
+		PRINTF("Rewound pcsx2_dump.gs\n");
+		return 0;
+	}
+	else
+	{
+		pcsx2_dump_file = fopen("mass:pcsx2_dump.gs", "r");
+		if (!pcsx2_dump_file)
+		{
+			PRINTF("Failed to open pcsx2_dump.gs\n");
+			fail();
+			return -1;
+		}
+		PRINTF("Opened pcsx2_dump.gs\n");
+	}
+#elif READ_MODE == READ_MEM
+	pcsx2_dump_ptr = pcsx2_dump;
+#endif
+	return 0;
+}
+
+int my_read_eof()
+{
+#if READ_MODE == READ_USB
+	return feof(pcsx2_dump_file);
+#elif READ_MODE == READ_MEM
+	return pcsx2_dump_ptr - pcsx2_dump >= size_pcsx2_dump;
+#endif
+}
+
+int my_read_close()
+{
+#if READ_MODE == READ_USB
+	if (pcsx2_dump_file)
+	{
+		if (fclose(pcsx2_dump_file) != 0)
+		{
+			PRINTF("Failed to close pcsx2_dump.gs\n");
+			fail();
+			return -1;
+		}
+		pcsx2_dump_file = NULL;
+	}
+#elif READ_MODE == READ_MEM
+	pcsx2_dump_ptr = NULL;
+#endif
+	return 0;
+}
+
+int my_read_skip(u32 size)
+{
+#if READ_MODE == READ_USB
+	if (fseek(pcsx2_dump_file, size, SEEK_CUR) != 0)
+	{
+		PRINTF("Failed to skip %d bytes\n", size);
+		fail();
+		return -1;
+	}
+#elif READ_MODE == READ_MEM
+	pcsx2_dump_ptr += size;
+#endif
+	return 0;
+}
+
+int my_read_pos()
+{
+#if READ_MODE == READ_USB
+	long val = ftell(pcsx2_dump_file);
+	if (val < 0)
+	{
+		PRINTF("Failed to get file position\n");
+		fail();
+		return -1;
+	}
+	return (int)val;
+#elif READ_MODE == READ_MEM
+	return pcsx2_dump_ptr - pcsx2_dump;
+#endif
+}
+
+int my_read8(u8* value)
+{
+#if READ_MODE == READ_USB
+	if (fread(value, 1, 1, pcsx2_dump_file) != 1)
+	{
+		PRINTF("Failed to read 1 byte\n");
+		fail();
+		return -1;
+	}
+#elif READ_MODE == READ_MEM
+  *value = *pcsx2_dump_ptr;
+	pcsx2_dump_ptr += 1;
+#endif
+  return 0;
+}
+
+int my_read32(u32* value)
+{
+#if READ_MODE == READ_USB
+	if (fread(value, 1, 4, pcsx2_dump_file) != 4)
+	{
+		PRINTF("Failed to read 4 bytes\n");
+		fail();
+		return -1;
+	}
+#elif READ_MODE == READ_MEM
+	*(u8*)value = *(u8*)pcsx2_dump_ptr;
+	*((u8*)value + 1) = *((u8*)pcsx2_dump_ptr + 1);
+	*((u8*)value + 2) = *((u8*)pcsx2_dump_ptr + 2);
+	*((u8*)value + 3) = *((u8*)pcsx2_dump_ptr + 3);
+	pcsx2_dump_ptr += 4;
+#endif
+	return 0;
+}
+
+int my_read(u8 *value, u32 size)
+{
+#if READ_MODE == READ_USB
+	if (fread(value, 1, size, pcsx2_dump_file) != size)
+	{
+		PRINTF("Failed to read %d bytes\n", size);
+		fail();
+		return -1;
+	}
+#elif READ_MODE == READ_MEM
+  memcpy(value, pcsx2_dump_ptr, size);
+	pcsx2_dump_ptr += size;
+#endif
+  return 0;
+}
+
+void gs_transfer(u32 size)
+{
+  if (size % 16 != 0)
+	{
+		PRINTF("Transfer size not multiple of 16: %d\n", size);
+		fail();
+	}
 
 	u32 total_qwc = size / 16;
 	while (total_qwc > 0)
 	{
     u32 transfer_qwc = total_qwc < TRANSFER_SIZE ? total_qwc : TRANSFER_SIZE;
-    memcpy(transfer_buffer, packet, transfer_qwc * sizeof(qword_t));
+
+		if (my_read((u8*)transfer_buffer, transfer_qwc * sizeof(qword_t)) != 0)
+		{
+			PRINTF("Failed to read transfer data\n");
+			fail();
+		}
 
 		FlushCache(0); // Flush cache since we copied data to the transfer buffer
 
@@ -89,7 +260,6 @@ void gs_transfer(u8* packet, u32 size)
 		dma_channel_wait(DMA_CHANNEL_GIF, 0);
 
 		total_qwc -= transfer_qwc;
-		packet += transfer_qwc * sizeof(qword_t);
 	}
 	return;
 }
@@ -140,13 +310,11 @@ int graph_set_mode_custom(int interlace, int mode, int ffmd)
 	return 0;
 }
 
-void gs_set_privileged(const u8* data, u32 init)
+void gs_set_privileged(gs_registers_t* registers, u32 init)
 {
-  memcpy(&register_buffer, data, sizeof(gs_registers_t));
-
   if (init)
   {
-    int mode = graph_get_mode_from_smode1(register_buffer.SMODE1);
+    int mode = graph_get_mode_from_smode1(registers->SMODE1);
 
     if (mode == -1)
     {
@@ -154,35 +322,35 @@ void gs_set_privileged(const u8* data, u32 init)
       return;
     }
 
-    u32 interlace = !!(register_buffer.SMODE2 & 1);
-    u32 ffmd = !!(register_buffer.SMODE2 & 2);
+    u32 interlace = !!(registers->SMODE2 & 1);
+    u32 ffmd = !!(registers->SMODE2 & 2);
     graph_set_mode_custom(interlace, mode, ffmd);
 
-		// Note: Should these be set explicitly or or they handled by the graph_set_mode_custom call?
-    // *GS_REG_SYNCHV = register_buffer.SYNCV;
-    // *GS_REG_SYNCH2 = register_buffer.SYNCH2;
-    // *GS_REG_SYNCH1 = register_buffer.SYNCH1;
-    // *GS_REG_SRFSH = register_buffer.SRFSH;
+		// Note: Should these be set explicitly or are they handled by the graph_set_mode_custom call?
+    // *GS_REG_SYNCHV = registers->SYNCV;
+    // *GS_REG_SYNCH2 = registers->SYNCH2;
+    // *GS_REG_SYNCH1 = registers->SYNCH1;
+    // *GS_REG_SRFSH = registers->SRFSH;
 
-    *GS_REG_SMODE2 = register_buffer.SMODE2;
-    *GS_REG_PMODE = register_buffer.PMODE;
+    *GS_REG_SMODE2 = registers->SMODE2;
+    *GS_REG_PMODE = registers->PMODE;
 
 		// Note: Should this be set or enough to call graph_set_mode_custom?
-    // *GS_REG_SMODE1 = register_buffer.SMODE1;
+    // *GS_REG_SMODE1 = registers->SMODE1;
   }
 
 	// CSR and IMR should not be set here
 	// They are only used for interrupts, which are not need for the dump
 
-	*GS_REG_BGCOLOR = register_buffer.BGCOLOR;
-	*GS_REG_EXTWRITE = register_buffer.EXTWRITE;
-	*GS_REG_EXTDATA = register_buffer.EXTDATA;
-	*GS_REG_EXTBUF = register_buffer.EXTBUF;
+	*GS_REG_BGCOLOR = registers->BGCOLOR;
+	*GS_REG_EXTWRITE = registers->EXTWRITE;
+	*GS_REG_EXTDATA = registers->EXTDATA;
+	*GS_REG_EXTBUF = registers->EXTBUF;
 
-	*GS_REG_DISPFB1 = register_buffer.DISP[0].DISPFB;
-	*GS_REG_DISPLAY1 = register_buffer.DISP[0].DISPLAY;
-	*GS_REG_DISPFB2 = register_buffer.DISP[1].DISPFB;
-	*GS_REG_DISPLAY2 = register_buffer.DISP[1].DISPLAY;
+	*GS_REG_DISPFB1 = registers->DISP[0].DISPFB;
+	*GS_REG_DISPLAY1 = registers->DISP[0].DISPLAY;
+	*GS_REG_DISPFB2 = registers->DISP[1].DISPFB;
+	*GS_REG_DISPLAY2 = registers->DISP[1].DISPLAY;
   
 	return;
 }
@@ -333,160 +501,152 @@ void gs_set_state(u8* data_ptr, u32 version)
 	return;
 }
 
-const u8* read_gs_dump_header(const u8* data)
+void read_gs_dump_header()
 {
-  memset(&dump.header, 0, sizeof(dump.header));
+  memset(&gs_dump_header, 0, sizeof(gs_dump_header));
 
 	u32 crc;
-	data = my_read32(data, &crc);
+	my_read32(&crc);
 	if (crc == 0xFFFFFFFF)
 	{
 		u32 header_size;
-		data = my_read32(data, &header_size);
-		data = my_read32(data, &dump.header.state_version);
-    data = my_read32(data, &dump.header.state_size);
-    data = my_read32(data, &dump.header.serial_offset);
-    data = my_read32(data, &dump.header.serial_size);
-    data = my_read32(data, &dump.header.crc);
-    data = my_read32(data, &dump.header.screenshot_width);
-    data = my_read32(data, &dump.header.screenshot_height);
-    data = my_read32(data, &dump.header.screenshot_offset);
-    data = my_read32(data, &dump.header.screenshot_size);
+		my_read32(&header_size);
+		my_read32(&gs_dump_header.state_version);
+    my_read32(&gs_dump_header.state_size);
+    my_read32(&gs_dump_header.serial_offset);
+    my_read32(&gs_dump_header.serial_size);
+    my_read32(&gs_dump_header.crc);
+    my_read32(&gs_dump_header.screenshot_width);
+    my_read32(&gs_dump_header.screenshot_height);
+    my_read32(&gs_dump_header.screenshot_offset);
+    my_read32(&gs_dump_header.screenshot_size);
 	}
 	else
 	{
-		dump.header.old = 1;
-		data = my_read32(data, &dump.header.state_size);
-		data = my_read32(data, &dump.header.state_version);
-		dump.header.crc = crc;
+		gs_dump_header.old = 1;
+		my_read32(&gs_dump_header.state_size);
+		my_read32(&gs_dump_header.state_version);
+		gs_dump_header.crc = crc;
 	}
-  return data;
 }
 
-void run_gs_dump(const u8* data, const u8* const data_end, u32 loops)
+void run_gs_dump(u32 loops)
 {
-  const u8* const data_start = (const u8*)data;
-
-  memset(&dump, 0, sizeof(dump));
-
 	u32 loop = 0;
   while (loop < loops)
   {
-    dma_channel_initialize(DMA_CHANNEL_GIF,NULL,0);
+    dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
     dma_channel_fast_waits(DMA_CHANNEL_GIF);
-
-    data = data_start;
-    data = read_gs_dump_header(data);
-    PRINTF("%08x: Header\n", data - data_start);
+    
+		my_read_init();
+		
+    read_gs_dump_header();
+    PRINTF("%08x: Header\n", my_read_pos());
 
     // Skip over the header data
-    data += dump.header.serial_size;
-    data += dump.header.screenshot_size;
+		my_read_skip(gs_dump_header.serial_size);
+		my_read_skip(gs_dump_header.screenshot_size);
 
 		if (loop == 0)
 		{
 			PRINTF("Dump Header\n");
-			PRINTF("  old: %d\n", dump.header.old);
-			PRINTF("  state_version: %d\n", dump.header.state_version);
-			PRINTF("  state_size: %d\n", dump.header.state_size);
-			PRINTF("  serial_offset: %d\n", dump.header.serial_offset);
-			PRINTF("  serial_size: %d\n", dump.header.serial_size);
-			PRINTF("  crc: %d\n", dump.header.crc);
-			PRINTF("  screenshot_width: %d\n", dump.header.screenshot_width);
-			PRINTF("  screenshot_height: %d\n", dump.header.screenshot_height);
-			PRINTF("  screenshot_offset: %d\n", dump.header.screenshot_offset);
-			PRINTF("  screenshot_size: %d\n", dump.header.screenshot_size);
+			PRINTF("  old: %d\n", gs_dump_header.old);
+			PRINTF("  state_version: %d\n", gs_dump_header.state_version);
+			PRINTF("  state_size: %d\n", gs_dump_header.state_size);
+			PRINTF("  serial_offset: %d\n", gs_dump_header.serial_offset);
+			PRINTF("  serial_size: %d\n", gs_dump_header.serial_size);
+			PRINTF("  crc: %d\n", gs_dump_header.crc);
+			PRINTF("  screenshot_width: %d\n", gs_dump_header.screenshot_width);
+			PRINTF("  screenshot_height: %d\n", gs_dump_header.screenshot_height);
+			PRINTF("  screenshot_offset: %d\n", gs_dump_header.screenshot_offset);
+			PRINTF("  screenshot_size: %d\n", gs_dump_header.screenshot_size);
 		}
 
-    if (!dump.header.old)
-      data += sizeof(dump.header.state_version); // Skip state version
+    if (!gs_dump_header.old)
+      my_read_skip(sizeof(gs_dump_header.state_version)); // Skip state version
 
-    const u32 state_size = dump.header.state_size - 4;
+    const u32 state_size = gs_dump_header.state_size - 4;
 
 		if (loop == 0)
 		{
-			data = my_read(data, gs_dump_state, state_size);
+			my_read(gs_dump_state, state_size);
 		}
 		else
 		{
-			data += state_size;
+			my_read_skip(state_size);
 		}
-		
-    PRINTF("%08x: State\n", data - data_start);
-    
-		data = my_read_ptr(data, (const void**)&dump.registers, REGISTERS_SIZE);
 
-		PRINTF("%08x: Registers\n", data - data_start);
-		gs_set_privileged(dump.registers, 1);
+    PRINTF("%08x: State\n", my_read_pos());
 
-    gs_set_state(gs_dump_state, dump.header.state_version);
+		my_read((u8*)&register_buffer, GS_REGISTERS_SIZE);
 
-    gs_dump_command_t* curr_command = malloc(sizeof(gs_dump_command_t));
-  
+		PRINTF("%08x: Registers\n", my_read_pos());
+		gs_set_privileged(&register_buffer, 1);
+
+    gs_set_state(gs_dump_state, gs_dump_header.state_version);
+
     u32 vsync = 0;
-    while (data < data_end)
+    while (!my_read_eof())
     {
-      memset(curr_command, 0, sizeof(gs_dump_command_t));
+			u8 tag;
+      my_read8(&tag);
+      // PRINTF("%08x: Tag %d\n", my_read_pos(), tag);
 
-      data = my_read8(data, &curr_command->tag);
-      // PRINTF("%08x: Tag %d\n", data - data_start, curr_command->tag);
-
-      switch (curr_command->tag)
+      switch (tag)
       {
         case GS_DUMP_TRANSFER:
         {
-          data = my_read8(data, &curr_command->path);
-          data = my_read32(data, &curr_command->size);
-          data = my_read_ptr(data, (const void**)&curr_command->data, curr_command->size);
+					u8 path;
+					u32 size;
+          my_read8(&path);
+          my_read32(&size);
+					
+          // PRINTF("%08x: Transfer %d %u\n", my_read_pos(), path, size);
+					
+          gs_transfer(size);
 
-          // PRINTF("%08x: Transfer %d %d\n", data - data_start, curr_command->path, curr_command->size);
-          
-          gs_transfer((u8*)curr_command->data, curr_command->size);
           break;
         }
         case GS_DUMP_VSYNC:
         {
 					
-					if (loop > 0 && vsync == SAVE_FRAME)
+					if (vsync == SAVE_FRAME)
 					{
-						free(curr_command);
 						return;
 					}
 
-					data = my_read8(data, &curr_command->field);
+					u8 field;
+					my_read8(&field);
 
           vsync++;
 
-          PRINTF("%08x: Vsync %d\n", data - data_start, curr_command->field);
+          PRINTF("%08x: Vsync %d\n", my_read_pos(), field);
 
           // graph_wait_vsync();
           break;
         }
         case GS_DUMP_FIFO:
         {
-          data = my_read32(data, &curr_command->size);
+					u32 size;
+          my_read32(&size);
 
-          PRINTF("%08x: Fifo %d\n", data - data_start, curr_command->size);
+          PRINTF("%08x: Fifo %d\n", my_read_pos(), size);
           break;
         }
         case GS_DUMP_REGISTERS:
         {
-
-					data = my_read_ptr(data, (const void**)&curr_command->data, 8192);
+					my_read((u8*)&register_buffer, GS_REGISTERS_SIZE);
 						
-					PRINTF("%08x: Registers\n", data - data_start);
-					gs_set_privileged(curr_command->data, 0);
+					PRINTF("%08x: Registers\n", my_read_pos());
+					gs_set_privileged(&register_buffer, 0);
 
           break;
         }
       }
     }
-
-    free(curr_command);
 		loop++;
   }
 }
-
 
 int graph_initialize_custom()
 {
@@ -598,15 +758,22 @@ void save_image()
   }
 }
 
-extern u32 size_pcsx2_dump;
-extern u8 pcsx2_dump[] __attribute__((aligned(16)));
-
 int main(int argc, char* argv[])
 {
-  run_gs_dump(pcsx2_dump, pcsx2_dump + size_pcsx2_dump, 10000);
+	init_gs();
+  init_draw();
+	if (init_usb(my_draw_clear_send) != 0)
+	{
+		PRINTF("Failed to initialize USB\n");
+		fail();
+		return -1;
+	}
+  run_gs_dump(10000);
+	my_read_close();
 	init_gs();
   init_draw();
   save_image();
+	PRINTF("All done, sleeping\n");
   SleepThread();
   return 0;
 }

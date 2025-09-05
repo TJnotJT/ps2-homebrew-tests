@@ -11,9 +11,23 @@ include ../Makefile.destdir
 EE_CFLAGS += -fno-builtin-printf
 EE_LIBS = -lkernel -ldraw -lpatches -lgraph -lmath3d -ldma
 
-all: runner.elf
+all: runner-mem.elf runner-usb.elf
 
-runner.elf: my_read.o pcsx2_dump.o main.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
+runner-mem.o: main.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DREAD_MODE=2 -c $< -o $@
+
+runner-usb.o: main.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DREAD_MODE=1 -c $< -o $@
+
+runner-mem.elf: pcsx2_dump.o runner-mem.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
+	$(DIR_GUARD)
+	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
+	# $(EE_STRIP) --strip-all $@
+ifdef DEST_DIR
+	cp $@ $(DEST_DIR)
+endif
+
+runner-usb.elf: runner-usb.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	# $(EE_STRIP) --strip-all $@
@@ -25,9 +39,6 @@ pcsx2_dump.c: dumps/pcsx2_dump.gs
 	bin2c dumps/pcsx2_dump.gs pcsx2_dump.c pcsx2_dump
 
 pcsx2_dump.o: pcsx2_dump.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
-
-my_read.o: my_read.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
 
 main.o: main.c

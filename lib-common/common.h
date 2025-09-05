@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gs_psm.h>
+#include <gs_gp.h>
 #include <assert.h>
 #include <tamtypes.h>
 
@@ -47,13 +48,13 @@ static inline u32 prim_verts(u32 prim_type)
 {
 	switch (prim_type)
 	{
-    case PRIM_POINT: return 1;
-    case PRIM_LINE: return 2;
-    case PRIM_LINE_STRIP: return 2;
-		case PRIM_TRIANGLE: return 3;
-    case PRIM_TRIANGLE_STRIP: return 3;
-    case PRIM_TRIANGLE_FAN: return 3;
-		case PRIM_SPRITE: return 2;
+    case GS_PRIM_POINT: return 1;
+    case GS_PRIM_LINE: return 2;
+    case GS_PRIM_LINE_STRIP: return 2;
+		case GS_PRIM_TRIANGLE: return 3;
+    case GS_PRIM_TRIANGLE_STRIP: return 3;
+    case GS_PRIM_TRIANGLE_FAN: return 3;
+		case GS_PRIM_SPRITE: return 2;
 		default: assert(0 && "Unsupported primitive type");
 	}
 	return 0;
