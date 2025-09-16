@@ -1,0 +1,1 @@
+Purpose is to understand the line drawing algorithm of PS2.
