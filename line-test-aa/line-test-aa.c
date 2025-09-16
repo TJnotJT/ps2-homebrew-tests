@@ -31,19 +31,16 @@
 #include "../lib-bmp/bmp.h"
 #include "../lib-usb/usb.h"
 
-#ifndef USE_AA
-#define USE_AA 0
+#ifndef VERTICAL_LINES
+#define VERTICAL_LINES 0
 #endif
 
-#define FRAME_WIDTH 1024
-#define FRAME_HEIGHT 1024
+#define FRAME_WIDTH 512
+#define FRAME_HEIGHT 512
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
-#define TEST_REGION_WIDTH 4
-#define TEST_REGION_HEIGHT 4
-#define TEST_REGIONS_X (FRAME_WIDTH / (2 * TEST_REGION_WIDTH))
-#define TEST_REGIONS_Y (FRAME_HEIGHT / (2 * TEST_REGION_HEIGHT))
-#define TEST_REGIONS (TEST_REGIONS_X * TEST_REGIONS_Y)
+#define TEST_REGIONS 32
+#define TEST_REGION_SIZE ((VERTICAL_LINES ? (FRAME_WIDTH / (2 * TEST_REGIONS)) : (FRAME_HEIGHT / (2 * TEST_REGIONS))))
 
 framebuffer_t g_frame; // Frame buffer
 zbuffer_t g_z; // Z buffer
@@ -132,60 +129,40 @@ void my_draw_clear_send(unsigned rgb)
 	free(packet);
 }
 
-void get_square_point(int which, int *x, int *y)
-{
-	which %= 16;
-
-	if (0 <= which && which < 4)
-	{
-		*x = which;
-		*y = 0;
-	}
-	else if (4 <= which && which < 8)
-	{
-		*x = 4;
-		*y = which - 4;
-	}
-	else if (8 <= which && which < 12)
-	{
-		*x = 12 - which;
-		*y = 4;
-	}
-	else // if (12 <= which && which < 16)
-	{
-		*x = 0;
-		*y = 16 - which;
-	}
-}
-
 qword_t* my_draw_line(qword_t* q, int region)
 {
-	const int x = WINDOW_X + 2 * TEST_REGION_WIDTH * (region / TEST_REGIONS_Y);
-	const int y = WINDOW_Y + 2 * TEST_REGION_HEIGHT * (region % TEST_REGIONS_Y);
-
-	int fx0 = rand() & 0xF;
-	int fx1 = rand() & 0xF;
-	int fy0 = rand() & 0xF;
-	int fy1 = rand() & 0xF;
+	int x = WINDOW_X;
+	int y = WINDOW_Y;
 	
-	int ddx0, ddy0, ddx1, ddy1;
-	get_square_point(rand(), &ddx0, &ddy0);
-	get_square_point(rand(), &ddx1, &ddy1);
+	x += VERTICAL_LINES ? (2 * TEST_REGION_SIZE * region) : 0;
+	y += VERTICAL_LINES ? 0 : (2 * TEST_REGION_SIZE * region);
 
-	int X0 = ((x + 1 + ddx0) << 4) + fx0;
-	int X1 = ((x + 1 + ddx1) << 4) + fx1;
-	int Y0 = ((y + 1 + ddy0) << 4) + fy0;
-	int Y1 = ((y + 1 + ddy1) << 4) + fy1;
+	int dx0 = VERTICAL_LINES ? (((TEST_REGION_SIZE / 2) * 16) + (region % 16)) : 0;
+	int dy0 = VERTICAL_LINES ? 0 : (((TEST_REGION_SIZE / 2) * 16) + (region % 16));
+	int dx1 = VERTICAL_LINES ? (((TEST_REGION_SIZE / 2) * 16) + (region % 16)) : 0;
+	int dy1 = VERTICAL_LINES ? 0 : (((TEST_REGION_SIZE / 2) * 16) + (region % 16));
+
+	int X0 = (x << 4) + dx0;
+	int Y0 = (y << 4) + dy0;
+	int X1 = ((x + (VERTICAL_LINES ? 0 : (FRAME_WIDTH - 1)))  << 4) + dx1;
+	int Y1 = ((y + (VERTICAL_LINES ? (FRAME_HEIGHT - 1) : 0)) << 4) + dy1;
+
+	if ((region / 16) & 1)
+	{
+		int tmp;
+		tmp = X0; X0 = X1; X1 = tmp;
+		tmp = Y0; Y0 = Y1; Y1 = tmp;
+	}
 
   const int Z = 0;
 
   PACK_GIFTAG(q, GIF_SET_TAG(4, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 0, 0, 0, 0, USE_AA, 0, 0, 0), GIF_REG_PRIM);
+  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 0, 0, 0, 0, 1, 0, 0, 0), GIF_REG_PRIM);
   q++;
 
-  PACK_GIFTAG(q, 0xFFFFFFFF, GS_REG_RGBAQ);
+  PACK_GIFTAG(q, 0xFF808080, GS_REG_RGBAQ);
   q++;
 
   PACK_GIFTAG(q, GS_SET_XYZ(X0, Y0, Z), GS_REG_XYZ2);
@@ -222,16 +199,10 @@ int render_test()
 	dma_channel_wait(DMA_CHANNEL_GIF, 0);
 	draw_wait_finish();
 
-	for (int region_x = 0; region_x < TEST_REGIONS_X; region_x++)
+	for (int region = 0; region < TEST_REGIONS; region++)
 	{
 		q = packet;
-		for (int region_y = 0; region_y < TEST_REGIONS_Y; region_y++)
-		{
-			int region = region_x * TEST_REGIONS_Y + region_y;
-
-			q = my_draw_line(q, region);
-
-		}
+		q = my_draw_line(q, region);
 		dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 		dma_channel_wait(DMA_CHANNEL_GIF, 0);
 	}
@@ -257,7 +228,7 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_frame.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
 	char filename[64];
-	sprintf(filename, (USE_AA ? "mass:line_test_4_aa.bmp" : "mass:line_test_4.bmp"));
+	sprintf(filename, (VERTICAL_LINES ? "mass:line_test_aa_v.bmp" : "mass:line_test_aa_h.bmp"));
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");
