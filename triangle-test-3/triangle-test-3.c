@@ -146,46 +146,38 @@ void my_draw_clear_send(unsigned rgb)
 
 qword_t* my_draw_triangle(qword_t* q, int region)
 {
-	const int x = WINDOW_X + (TEST_REGION_WIDTH + TEST_REGION_PAD) * (region / TEST_REGIONS_Y);
-	const int y = WINDOW_Y + (TEST_REGION_HEIGHT + TEST_REGION_PAD) * (region % TEST_REGIONS_Y);
+	int region_x = region / TEST_REGIONS_Y;
+	int region_y = region % TEST_REGIONS_Y;
+	const int x = WINDOW_X + (TEST_REGION_WIDTH + TEST_REGION_PAD) * region_x;
+	const int y = WINDOW_Y + (TEST_REGION_HEIGHT + TEST_REGION_PAD) * region_y;
 
-	int left = (x * 16) + (rand() % 16);
-	int right = ((x + TEST_REGION_WIDTH) * 16) + (rand() % 16);
-	int top = (y * 16) + (rand() % 16);
-	int bottom = ((y + TEST_REGION_WIDTH) * 16) + (rand() % 16);
+	int left = (x * 16) + 8;
+	int center = left;
+	int right = ((x + TEST_REGION_WIDTH) * 16) + 8;
+	int top = (y * 16) + 8;
+	int mid = top;
+	int bottom = ((y + TEST_REGION_HEIGHT) * 16) + 8;
+
+	if (region_x == 0)
+	{
+		mid += 4 * (region_y % (16 * TEST_REGION_HEIGHT));
+	}
+	else if (region_x == 1)
+	{
+		center += 4 * (region_y % (16 * TEST_REGION_HEIGHT));
+	}
+	else
+		return q; 
 
   const int Z = 0;
-
-	int rotation = rand() % 4;
 
 	int X0, Y0;
 	int X1, Y1;
 	int X2, Y2;
 
-	if (rotation == 0)
-	{
-		X0 = left; Y0 = top;
-		X1 = right; Y1 = top;
-		X2 = left; Y2 = bottom;
-	}
-	else if (rotation == 1)
-	{
-		X0 = right; Y0 = top;
-		X1 = right; Y1 = bottom;
-		X2 = left; Y2 = top;
-	}
-	else if (rotation == 2)
-	{
-		X0 = right; Y0 = bottom;
-		X1 = left; Y1 = bottom;
-		X2 = right; Y2 = top;
-	}
-	else // if (rotation == 3)
-	{
-		X0 = left; Y0 = bottom;
-		X1 = left; Y1 = top;
-		X2 = right; Y2 = bottom;
-	}
+	X0 = left; Y0 = top;
+	X1 = right; Y1 = mid;
+	X2 = center; Y2 = bottom;
 
   PACK_GIFTAG(q, GIF_SET_TAG(5, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
@@ -269,7 +261,7 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_frame.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
 	char filename[64];
-	sprintf(filename, (USE_AA ? "mass:triangle_test_aa.bmp" : "mass:triangle_test.bmp"));
+	sprintf(filename, (USE_AA ? "mass:triangle_test_3_aa.bmp" : "mass:triangle_test_3.bmp"));
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");

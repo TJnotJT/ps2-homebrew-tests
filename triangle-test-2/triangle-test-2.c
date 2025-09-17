@@ -39,9 +39,9 @@
 #define FRAME_HEIGHT 1024
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
-#define TEST_REGION_WIDTH 8
-#define TEST_REGION_HEIGHT 8
-#define TEST_REGION_PAD 4
+#define TEST_REGION_WIDTH 16
+#define TEST_REGION_HEIGHT 16
+#define TEST_REGION_PAD 2
 #define TEST_REGIONS_X (FRAME_WIDTH / (TEST_REGION_WIDTH + TEST_REGION_PAD))
 #define TEST_REGIONS_Y (FRAME_HEIGHT / (TEST_REGION_HEIGHT + TEST_REGION_PAD))
 #define TEST_REGIONS (TEST_REGIONS_X * TEST_REGIONS_Y)
@@ -97,17 +97,6 @@ qword_t *my_draw_disable_tests(qword_t *q, int context)
 
 }
 
-qword_t *my_draw_set_alpha_test(qword_t *q, int context)
-{
-	PACK_GIFTAG(q, GIF_SET_TAG(1, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
-	q++;
-	PACK_GIFTAG(q, GS_SET_TEST(DRAW_ENABLE, ATEST_METHOD_NOTEQUAL, 0x80, ATEST_KEEP_ALL,
-							   DRAW_DISABLE, DRAW_DISABLE,
-							   DRAW_ENABLE, ZTEST_METHOD_ALLPASS), GS_REG_TEST + context);
-	q++;
-	return q;
-}
-
 qword_t* my_draw_clear(qword_t* q, unsigned rgb)
 {
 	color_t bg_color;
@@ -149,43 +138,14 @@ qword_t* my_draw_triangle(qword_t* q, int region)
 	const int x = WINDOW_X + (TEST_REGION_WIDTH + TEST_REGION_PAD) * (region / TEST_REGIONS_Y);
 	const int y = WINDOW_Y + (TEST_REGION_HEIGHT + TEST_REGION_PAD) * (region % TEST_REGIONS_Y);
 
-	int left = (x * 16) + (rand() % 16);
-	int right = ((x + TEST_REGION_WIDTH) * 16) + (rand() % 16);
-	int top = (y * 16) + (rand() % 16);
-	int bottom = ((y + TEST_REGION_WIDTH) * 16) + (rand() % 16);
+	int X0 = (x * 16) + (rand() % (TEST_REGION_WIDTH * 16));
+	int X1 = (x * 16) + (rand() % (TEST_REGION_WIDTH * 16));
+	int X2 = (x * 16) + (rand() % (TEST_REGION_WIDTH * 16));
+	int Y0 = (y * 16) + (rand() % (TEST_REGION_WIDTH * 16));
+	int Y1 = (y * 16) + (rand() % (TEST_REGION_WIDTH * 16));
+	int Y2 = (y * 16) + (rand() % (TEST_REGION_WIDTH * 16));
 
   const int Z = 0;
-
-	int rotation = rand() % 4;
-
-	int X0, Y0;
-	int X1, Y1;
-	int X2, Y2;
-
-	if (rotation == 0)
-	{
-		X0 = left; Y0 = top;
-		X1 = right; Y1 = top;
-		X2 = left; Y2 = bottom;
-	}
-	else if (rotation == 1)
-	{
-		X0 = right; Y0 = top;
-		X1 = right; Y1 = bottom;
-		X2 = left; Y2 = top;
-	}
-	else if (rotation == 2)
-	{
-		X0 = right; Y0 = bottom;
-		X1 = left; Y1 = bottom;
-		X2 = right; Y2 = top;
-	}
-	else // if (rotation == 3)
-	{
-		X0 = left; Y0 = bottom;
-		X1 = left; Y1 = top;
-		X2 = right; Y2 = bottom;
-	}
 
   PACK_GIFTAG(q, GIF_SET_TAG(5, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
@@ -227,7 +187,6 @@ int render_test()
 	q = draw_setup_environment(q, 0, &g_frame, &g_z);
 	q = draw_primitive_xyoffset(q, 0, WINDOW_X, WINDOW_Y);
 	q = my_draw_clear(q, 0);
-	// q = my_draw_set_alpha_test(q, 0);
 	q = my_draw_disable_tests(q, 0);
 	q = draw_finish(q);
 	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
@@ -269,7 +228,7 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_frame.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
 	char filename[64];
-	sprintf(filename, (USE_AA ? "mass:triangle_test_aa.bmp" : "mass:triangle_test.bmp"));
+	sprintf(filename, (USE_AA ? "mass:triangle_test_2_aa.bmp" : "mass:triangle_test_2.bmp"));
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");

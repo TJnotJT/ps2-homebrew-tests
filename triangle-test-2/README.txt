@@ -1,0 +1,1 @@
+Purpose is to draw a bunch of random triangles in 16x16 pixel squares to make sure they match with real hardware.
