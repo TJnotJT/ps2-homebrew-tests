@@ -1,0 +1,1 @@
+Purpose is to draw a bunch of skinny triangles on integer coordiantes to find conditions for AA boundary.
