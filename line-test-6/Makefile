@@ -10,21 +10,23 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: line-test-5-h.elf line-test-5-v.elf line-test-5-h-aa.elf line-test-5-v-aa.elf
+all: line-test-6.elf line-test-6-aa.elf
 
-line-test-5-h.o: line-test-5.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DVERTICAL_LINES=0 -DUSE_AA=0 -c $< -o $@
+line-test-6.o: line-test-6.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=0 -c $< -o $@
 
-line-test-5-v.o: line-test-5.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DVERTICAL_LINES=1 -DUSE_AA=0 -c $< -o $@
+line-test-6-aa.o: line-test-6.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=1 -c $< -o $@
 
-line-test-5-h-aa.o: line-test-5.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DVERTICAL_LINES=0 -DUSE_AA=1 -c $< -o $@
+line-test-6.elf: line-test-6.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
+	$(DIR_GUARD)
+	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
+	$(EE_STRIP) --strip-all $@
+ifdef DEST_DIR
+	cp $@ $(DEST_DIR)
+endif
 
-line-test-5-v-aa.o: line-test-5.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DVERTICAL_LINES=1 -DUSE_AA=1 -c $< -o $@
-
-%.elf: %.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
+line-test-6-aa.elf: line-test-6-aa.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	$(EE_STRIP) --strip-all $@
@@ -33,7 +35,7 @@ ifdef DEST_DIR
 endif
 
 clean:
-	rm -f *.elf *.o
+	rm -f line-test-6.elf line-test-6.o line-test-6-aa.o
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal

@@ -35,6 +35,10 @@
 #define VERTICAL_LINES 0
 #endif
 
+#ifndef USE_AA
+#define USE_AA 0
+#endif
+
 #define FRAME_WIDTH 1024
 #define FRAME_HEIGHT 1024
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
@@ -159,7 +163,7 @@ qword_t* my_draw_line(qword_t* q, int region)
   PACK_GIFTAG(q, GIF_SET_TAG(4, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 0, 0, 0, 0, 0, 0, 0, 0), GIF_REG_PRIM);
+  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 0, 0, 0, 0, USE_AA, 0, 0, 0), GIF_REG_PRIM);
   q++;
 
   PACK_GIFTAG(q, 0xFFFFFFFF, GS_REG_RGBAQ);
@@ -228,7 +232,7 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_frame.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
 	char filename[64];
-	sprintf(filename, (VERTICAL_LINES ? "mass:line_test_5_v.bmp" : "mass:line_test_5_h.bmp"));
+	sprintf(filename, "mass:line_test_5%s%s.bmp", VERTICAL_LINES ? "_v" : "_h", USE_AA ? "_aa" : "");
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");

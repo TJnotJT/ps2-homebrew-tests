@@ -31,20 +31,18 @@
 #include "../lib-bmp/bmp.h"
 #include "../lib-usb/usb.h"
 
-#ifndef SWAP_FIRST_AND_LAST
-#define SWAP_FIRST_AND_LAST 0
+#ifndef USE_AA
+#define USE_AA 0
 #endif
 
-#define FRAME_WIDTH 512
-#define FRAME_HEIGHT 512
+#define FRAME_WIDTH 1024
+#define FRAME_HEIGHT 1024
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
-#define TEST_REGION_WIDTH 4
-#define TEST_REGION_HEIGHT 4
-#define CULL_DIAMOND_POINTS 4
-#define DIAMOND_POINTS (32 / CULL_DIAMOND_POINTS)
-#define TEST_REGIONS_X (2 * DIAMOND_POINTS)
-#define TEST_REGIONS_Y (DIAMOND_POINTS)
+#define TEST_REGION_SIZE 4
+#define TEST_REGION_SIZE 4
+#define TEST_REGIONS_X (FRAME_WIDTH / TEST_REGION_SIZE)
+#define TEST_REGIONS_Y (FRAME_HEIGHT / TEST_REGION_SIZE)
 #define TEST_REGIONS (TEST_REGIONS_X * TEST_REGIONS_Y)
 
 framebuffer_t g_frame; // Frame buffer
@@ -134,91 +132,50 @@ void my_draw_clear_send(unsigned rgb)
 	free(packet);
 }
 
-void get_diamond_point(int which, int *x, int *y)
-{
-	which *= CULL_DIAMOND_POINTS;
-
-	int sign_x = (which % 32) / 16;
-	int sign_y = (which % 16) / 8;
-
-	sign_x = (sign_x == 0) ? 1 : -1;
-	sign_y = (sign_y == 0) ? 1 : -1;
-
-	if (sign_x == -1)
-		sign_y = -sign_y;
-
-	int idx = which % 8;
-
-	if ((sign_x > 0) && (sign_y > 0))
-	{
-		*x = idx;
-		*y = 8 - idx;
-	}
-	else if ((sign_x > 0) && (sign_y < 0))
-	{
-		*x = 8 - idx;
-		*y = -idx;
-	}
-	else if ((sign_x < 0) && (sign_y < 0))
-	{
-		*x = -idx;
-		*y = -8 + idx;
-	}
-	else // (sign_x < 0) && (sign_y > 0)
-	{
-		*x = -8 + idx;
-		*y = idx;
-	}
-}
-
 qword_t* my_draw_line(qword_t* q, int region)
 {
-	const int x = WINDOW_X + 2 * TEST_REGION_WIDTH * (region / TEST_REGIONS_Y);
-	const int y = WINDOW_Y + 2 * TEST_REGION_HEIGHT * (region % TEST_REGIONS_Y);
+	const int x = WINDOW_X + 2 * TEST_REGION_SIZE * (region / TEST_REGIONS_Y);
+	const int y = WINDOW_Y + 2 * TEST_REGION_SIZE * (region % TEST_REGIONS_Y);
 
-	int dx0, dy0, dx1, dy1;
-	get_diamond_point(region % DIAMOND_POINTS, &dx0, &dy0);
-	get_diamond_point((region / DIAMOND_POINTS) % DIAMOND_POINTS, &dx1, &dy1);
+	int fx0 = region % 16;
+	int fy0 = (region / 16) % 16;
+	int fx1 = (region / 256) % 16;
+	int rotation = (region / 4096) % 4;
+
+	int x0 = fx0;
+	int y0 = fy0;
+	int x1 = (TEST_REGION_SIZE - 1) * 16 + fx1;
+	int y1 = y0 + (x1 - x0); // perfect 45 degree slope
+
+	if (rotation == 1 || rotation == 3)
+	{
+		// Flip horizontally
+		x0 = 16 * TEST_REGION_SIZE - fx0;
+		x1 = 16 * TEST_REGION_SIZE - x1;
+	}
 	
-	int x_major = ((region / (TEST_REGIONS / 2)) % 2) == 0;
-
-	int X0, X1, Y0, Y1;
-	if (x_major)
+	if (rotation == 2 || rotation == 3)
 	{
-		X0 = ((x + 1) << 4);
-		X1 = ((x + 4) << 4);
-		Y0 = ((y + 2) << 4);
-		Y1 = ((y + 2) << 4);
-	}
-	else
-	{
-		X0 = ((x + 2) << 4);
-		X1 = ((x + 2) << 4);
-		Y0 = ((y + 1) << 4);
-		Y1 = ((y + 4) << 4);
+		// Swap X and Y
+		int tmp = x0;
+		x0 = y0;
+		y0 = tmp;
+		tmp = x1;
+		x1 = y1;
+		y1 = tmp;
 	}
 
-	X0 += dx0;
-	X1 += dx1;
-	Y0 += dy0;
-	Y1 += dy1;
-
-	if (SWAP_FIRST_AND_LAST)
-	{
-		int temp = X0;
-		X0 = X1;
-		X1 = temp;
-		temp = Y0;
-		Y0 = Y1;
-		Y1 = temp;
-	}
+	int X0 = x * 16 + x0;
+	int X1 = x * 16 + x1;
+	int Y0 = y * 16 + y0;
+	int Y1 = y * 16 + y1;
 
   const int Z = 0;
 
   PACK_GIFTAG(q, GIF_SET_TAG(4, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 0, 0, 0, 0, 0, 0, 0, 0), GIF_REG_PRIM);
+  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 0, 0, 0, 0, USE_AA, 0, 0, 0), GIF_REG_PRIM);
   q++;
 
   PACK_GIFTAG(q, 0xFFFFFFFF, GS_REG_RGBAQ);
@@ -235,6 +192,8 @@ qword_t* my_draw_line(qword_t* q, int region)
 
 int render_test()
 {
+	srand(123);
+
 	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 8192);
 	qword_t* q;
 
@@ -291,7 +250,7 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_frame.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
 	char filename[64];
-	sprintf(filename, "mass:line_test_3%s.bmp", SWAP_FIRST_AND_LAST ? "_swap" : "");
+	sprintf(filename, "mass:line_test_6%s.bmp", USE_AA ? "_aa" : "");
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");

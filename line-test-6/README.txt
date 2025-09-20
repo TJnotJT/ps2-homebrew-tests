@@ -1,0 +1,1 @@
+Purpose is to draw a bunch of random lines in 4x4 pixel squares to make sure they match with real hardware.
