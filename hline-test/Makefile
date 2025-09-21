@@ -10,12 +10,15 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: hline-test.elf
+all: hline-test.elf hline-test-aa.elf
 
 hline-test.o: hline-test.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTEST_MODE=1 -c $< -o $@
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=0 -c $< -o $@
 
-hline-test.elf: hline-test.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
+hline-test-aa.o: hline-test.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=1 -c $< -o $@
+
+%.elf: %.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	$(EE_STRIP) --strip-all $@
@@ -24,7 +27,7 @@ ifdef DEST_DIR
 endif
 
 clean:
-	rm -f hline-test.elf hline-test.o
+	rm -f *.elf *.o
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal

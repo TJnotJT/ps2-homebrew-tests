@@ -31,12 +31,19 @@
 #include "../lib-bmp/bmp.h"
 #include "../lib-usb/usb.h"
 
-#define FRAME_WIDTH 512
-#define FRAME_HEIGHT 512
+#ifndef USE_AA
+#define USE_AA 0
+#endif
+
+#define FRAME_WIDTH 1024
+#define FRAME_HEIGHT 1024
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
-#define TEST_REGION_WIDTH 4
-#define TEST_REGIONS 512
+#define TEST_REGION_WIDTH 16
+#define TEST_REGION_HEIGHT 4
+#define TEST_REGIONS_X (FRAME_WIDTH / TEST_REGION_WIDTH)
+#define TEST_REGIONS_Y (FRAME_HEIGHT / TEST_REGION_HEIGHT)
+#define TEST_REGIONS (16 * 16 * 16 * 2)
 
 framebuffer_t g_frame; // Frame buffer
 zbuffer_t g_z; // Z buffer
@@ -100,7 +107,7 @@ qword_t* my_draw_clear(qword_t* q, unsigned rgb)
 
 	PACK_GIFTAG(q, GIF_SET_TAG(4, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
 	q++;
-	PACK_GIFTAG(q, GIF_SET_PRIM(PRIM_SPRITE, 0, 0, 0, 0, 0, 0, 0, 0), GIF_REG_PRIM);
+	PACK_GIFTAG(q, GIF_SET_PRIM(PRIM_SPRITE, 0, 0, 0, 0, USE_AA, 0, 0, 0), GIF_REG_PRIM);
 	q++;
 	PACK_GIFTAG(q, bg_color.rgbaq, GIF_REG_RGBAQ);
 	q++;
@@ -125,29 +132,17 @@ void my_draw_clear_send(unsigned rgb)
 	free(packet);
 }
 
-
-int expected_final_rgb(int prim_rgb, int prim_f, int fog_rgb)
-{
-	const int prim_chan[3] = { (prim_rgb >> 0) & 0xFF, (prim_rgb >> 8) & 0xFF, (prim_rgb >> 16) & 0xFF };
-	const int fog_chan[3] = { (fog_rgb >> 0) & 0xFF, (fog_rgb >> 8) & 0xFF, (fog_rgb >> 16) & 0xFF };
-	prim_f &= 0xFF;
-
-	int expected_chan[3];
-	for (int i = 0; i < 3; i++)
-		expected_chan[i] = (prim_chan[i] * prim_f + fog_chan[i] * (0x100 - prim_f)) >> 8;
-	return (expected_chan[0] << 0) | (expected_chan[1] << 8) | (expected_chan[2] << 16);
-}
-
 qword_t* my_draw_hline(qword_t* q, int region)
 {
 	// 4 vertical pixels per column and 1 blank
-	const int x0 = WINDOW_X + 2 * TEST_REGION_WIDTH * (region / (FRAME_HEIGHT / 2));
+	const int x0 = WINDOW_X + TEST_REGION_WIDTH * (region / TEST_REGIONS_Y) + 2;
   const int x1 = x0 + (TEST_REGION_WIDTH - 2);
-	const int y = WINDOW_Y + 2 * (region % (FRAME_HEIGHT / 2));
+	const int y = WINDOW_Y + TEST_REGION_HEIGHT * (region % TEST_REGIONS_Y);
   
   const int x0_frac = region & 0xF;
   const int x1_frac = (region >> 4) & 0xF;
-  const int dir = (region >> 8) & 1;
+	const int y_frac = (region >> 8) & 0xF;
+  const int dir = (region >> 9) & 1;
   
   int X0 = (x0 << 4) | x0_frac;
   int X1 = (x1 << 4) | x1_frac;
@@ -157,7 +152,7 @@ qword_t* my_draw_hline(qword_t* q, int region)
     X0 = X1;
     X1 = temp;
   }
-  int Y = (y << 4);
+  int Y = ((1 + y) << 4) | y_frac;
   const int Z = 0;
 
   PACK_GIFTAG(q, GIF_SET_TAG(4, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
@@ -207,7 +202,7 @@ int render_test(u32 seed)
 	{
 		q = my_draw_hline(q, region);
 
-		if ((region > 0) && (region % FRAME_HEIGHT == 0))
+		if ((region > 0) && (region % 1024 == 0))
 		{
 			dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 			dma_channel_wait(DMA_CHANNEL_GIF, 0);
@@ -245,7 +240,7 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_frame.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
 	char filename[64];
-	sprintf(filename, "mass:hline_data.bmp");
+	sprintf(filename, "mass:hline_data%s.bmp", USE_AA ? "_aa" : "");
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
 		printf("Failed to write hline data to USB\n");
