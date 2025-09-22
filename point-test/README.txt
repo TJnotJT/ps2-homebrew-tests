@@ -1,0 +1,1 @@
+Purpose is to draw bunch of points with different fractional coords to see how points are rounded.
