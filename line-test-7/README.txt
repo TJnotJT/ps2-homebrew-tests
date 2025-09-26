@@ -1,0 +1,1 @@
+Purpose is to draw a bunch of smooth shaded small lines to see what happens with extrapolation/preseteps. 
