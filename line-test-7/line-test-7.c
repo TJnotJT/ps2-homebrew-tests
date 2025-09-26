@@ -52,6 +52,7 @@ framebuffer_t g_frame; // Frame buffer
 zbuffer_t g_z; // Z buffer
 
 u8 g_frame_data[FRAME_WIDTH * FRAME_HEIGHT * 4] __attribute__((aligned(64)));
+u8 g_z_data[FRAME_WIDTH * FRAME_HEIGHT * 4] __attribute__((aligned(64)));
 
 int graph_initialize_custom()
 {
@@ -78,11 +79,11 @@ void init_gs()
 	g_frame.psm = GS_PSM_32;
 	g_frame.address = graph_vram_allocate(FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, GRAPH_ALIGN_PAGE);
 
-	g_z.enable = DRAW_DISABLE;
+	g_z.enable = DRAW_ENABLE;
 	g_z.mask = 0;
 	g_z.method = ZTEST_METHOD_ALLPASS;
-	g_z.zsm = 0;
-	g_z.address = 0;
+	g_z.zsm = GS_ZBUF_32;
+	g_z.address = graph_vram_allocate(FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, GRAPH_ALIGN_PAGE);
 
 	graph_initialize_custom();
 }
@@ -151,6 +152,8 @@ qword_t* my_draw_line(qword_t* q, int region)
 	int Y0 = (y + 1) * 16 + fy0;
 	int X1 = (x + 1) * 16 + fx0 + 16;
 	int Y1 = (y + 1) * 16 + fy0;
+	int Z0 = c0;
+	int Z1 = c1;
 
 	if (VERTICAL)
 	{
@@ -158,8 +161,6 @@ qword_t* my_draw_line(qword_t* q, int region)
 		tmp = X0; X0 = Y0; Y0 = tmp;
 		tmp = X1; X1 = Y1; Y1 = tmp;
 	}
-
-  const int Z = 0;
 
   PACK_GIFTAG(q, GIF_SET_TAG(5, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
@@ -170,13 +171,13 @@ qword_t* my_draw_line(qword_t* q, int region)
   PACK_GIFTAG(q, 0xFF000000 | c0, GS_REG_RGBAQ);
   q++;
 
-  PACK_GIFTAG(q, GS_SET_XYZ(X0, Y0, Z), GS_REG_XYZ2);
+  PACK_GIFTAG(q, GS_SET_XYZ(X0, Y0, Z0), GS_REG_XYZ2);
   q++;
 
 	PACK_GIFTAG(q, 0xFF000000 | c1, GS_REG_RGBAQ);
   q++;
 
-  PACK_GIFTAG(q, GS_SET_XYZ(X1, Y1, Z), GS_REG_XYZ2);
+  PACK_GIFTAG(q, GS_SET_XYZ(X1, Y1, Z1), GS_REG_XYZ2);
   q++;
 
 	return q;
@@ -240,10 +241,19 @@ int main(int argc, char *argv[])
 
 	read_framebuffer(g_frame.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, g_frame_data);
 
+	read_framebuffer(g_z.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, g_z_data);
+
 	char filename[64];
 	sprintf(filename, "mass:line_test_7%s%s.bmp", VERTICAL ? "_v" : "_h", USE_AA ? "_aa" : "");
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
+		printf("Failed to write line test data to USB\n");
+	else
+		printf("Wrote line test data to USB\n");
+
+	sprintf(filename, "mass:line_test_7%s%s_z.bmp", VERTICAL ? "_v" : "_h", USE_AA ? "_aa" : "");
+
+	if (write_bmp_to_usb(filename, g_z_data, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");
 	else
 		printf("Wrote line test data to USB\n");
