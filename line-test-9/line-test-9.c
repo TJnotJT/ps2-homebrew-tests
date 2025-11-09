@@ -31,10 +31,6 @@
 #include "../lib-bmp/bmp.h"
 #include "../lib-usb/usb.h"
 
-#ifndef USE_AA
-#define USE_AA 0
-#endif
-
 #ifndef USE_TEX
 #define USE_TEX 0
 #endif
@@ -44,9 +40,9 @@
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
 #define TEST_REGION_SIZE 64
-#define TEST_REGIONS_X 8
-#define TEST_REGIONS_Y 8
-#define TEST_REGIONS (TEST_REGIONS_X * TEST_REGIONS_Y)
+#define TEST_REGIONS_X 4
+#define TEST_REGIONS_Y 4
+#define TEST_REGIONS 16
 
 #define TEX_BUF_WIDTH 256
 #define TEX_WIDTH 256
@@ -226,15 +222,19 @@ void my_draw_clear_send(unsigned rgb)
 
 qword_t* my_draw_line(qword_t* q, int region)
 {
+	unsigned use_aa = (region & 1) == 1;
+	unsigned use_abe = (region & 2) == 2;
+	unsigned alpha_index = (region >> 2) & 3;
+	unsigned alpha_values[4] = { 64, 128, 192, 255 };
+	unsigned color = (alpha_values[alpha_index] << 24) | 0x404040;
+
 	const int x = WINDOW_X + TEST_REGION_SIZE * (region % TEST_REGIONS_X);
 	const int y = WINDOW_Y + TEST_REGION_SIZE * (region / TEST_REGIONS_X);
 
-	int fx0 = rand() % (16 * (TEST_REGION_SIZE - 2));
-	int fy0 = rand() % (16 * (TEST_REGION_SIZE - 2));
-	int fx1 = rand() % (16 * (TEST_REGION_SIZE - 2));
-	int fy1 = rand() % (16 * (TEST_REGION_SIZE - 2));
-	int c0 = rand() % 256;
-	int c1 = rand() % 256;
+	int fx0 = 16;
+	int fy0 = 16 * (TEST_REGION_SIZE / 2) + 4;
+	int fx1 = 16 * (TEST_REGION_SIZE - 2);
+	int fy1 = 16 * (TEST_REGION_SIZE / 2) + 4;
 
 	int U0 = rand() % (TEX_WIDTH * 16);
 	int V0 = rand() % (TEX_HEIGHT * 16);
@@ -244,19 +244,22 @@ qword_t* my_draw_line(qword_t* q, int region)
 	int Y0 = (y + 1) * 16 + fy0;
 	int X1 = (x + 1) * 16 + fx1;
 	int Y1 = (y + 1) * 16 + fy1;
-	int Z0 = rand() & 0xFFFF;
-	int Z1 = rand() & 0xFFFF;
+	int Z0 = 0;
+	int Z1 = 1;
 
-  PACK_GIFTAG(q, GIF_SET_TAG(7, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  PACK_GIFTAG(q, GIF_SET_TAG(8, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 1, USE_TEX, 0, 0, USE_AA, 1, 0, 0), GIF_REG_PRIM);
+  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 1, 0, 0, use_abe, use_aa, 1, 0, 0), GIF_REG_PRIM);
   q++;
+
+	PACK_GIFTAG(q, GS_SET_ALPHA(0, 2, 0, 0, 64), GS_REG_ALPHA);
+	q++;
 
 	PACK_GIFTAG(q, GS_SET_UV(U0, V0), GS_REG_UV);
 	q++;
 	
-  PACK_GIFTAG(q, 0xFF000000 | c0, GS_REG_RGBAQ);
+  PACK_GIFTAG(q, color, GS_REG_RGBAQ);
   q++;
 
   PACK_GIFTAG(q, GS_SET_XYZ(X0, Y0, Z0), GS_REG_XYZ2);
@@ -265,7 +268,7 @@ qword_t* my_draw_line(qword_t* q, int region)
 	PACK_GIFTAG(q, GS_SET_UV(U1, V1), GS_REG_UV);
 	q++;
 
-	PACK_GIFTAG(q, 0xFF000000 | c1, GS_REG_RGBAQ);
+	PACK_GIFTAG(q, color, GS_REG_RGBAQ);
   q++;
 
   PACK_GIFTAG(q, GS_SET_XYZ(X1, Y1, Z1), GS_REG_XYZ2);
@@ -333,16 +336,9 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_z.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, g_z_data);
 
 	char filename[64];
-	sprintf(filename, "mass:line_test_8%s%s.bmp", USE_AA ? "_aa" : "", USE_TEX ? "_tex" : "");
+	sprintf(filename, "mass:line_test_9%s.bmp", USE_TEX ? "_tex" : "");
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
-		printf("Failed to write line test data to USB\n");
-	else
-		printf("Wrote line test data to USB\n");
-
-	sprintf(filename, "mass:line_test_8%s_z.bmp", USE_AA ? "_aa" : "");
-
-	if (write_bmp_to_usb(filename, g_z_data, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");
 	else
 		printf("Wrote line test data to USB\n");
