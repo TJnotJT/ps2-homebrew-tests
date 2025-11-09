@@ -1,0 +1,1 @@
+Purpose of this test is to draw a bunch of random lines with random attributes to test attribute interpolation accuracy in lines.
