@@ -10,13 +10,13 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: line-test-9.elf line-test-9-tex.elf
+all: line-test-9.elf line-test-9-varyalpha.elf
 
 line-test-9.o: line-test-9.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=0 -DVERTICAL=0 -DUSE_TEX=0 -c $< -o $@
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=0 -c $< -o $@
 
-line-test-9-tex.o: line-test-9.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=0 -DVERTICAL=0 -DUSE_TEX=1 -c $< -o $@
+line-test-9-varyalpha.o: line-test-9.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DUSE_AA=0 -DVARY_ALPHA=1 -c $< -o $@
 
 %.elf: %.o ../lib-bmp/lib-bmp.a ../lib-read-fb/lib-read-fb.a ../lib-usb/lib-usb.a ../lib-common/lib-common.a
 	$(DIR_GUARD)

@@ -25,14 +25,15 @@
 #include <draw.h>
 #include <draw3d.h>
 #include <math3d.h>
+#include <math.h>
 
 #include "../lib-common/common.h"
 #include "../lib-read-fb/read-fb.h"
 #include "../lib-bmp/bmp.h"
 #include "../lib-usb/usb.h"
 
-#ifndef USE_TEX
-#define USE_TEX 0
+#ifndef VARY_ALPHA
+#define VARY_ALPHA 0
 #endif
 
 #define FRAME_WIDTH 512
@@ -58,6 +59,16 @@ texwrap_t g_wrap;
 u8 g_frame_data[FRAME_WIDTH * FRAME_HEIGHT * 4] __attribute__((aligned(64)));
 u8 g_z_data[FRAME_WIDTH * FRAME_HEIGHT * 4] __attribute__((aligned(64)));
 u8 g_texture_data[256 * 256 * 4] __attribute__((aligned(64)));
+
+int max(int a, int b)
+{
+	return (a > b) ? a : b;
+}
+
+int min(int a, int b)
+{
+	return (a < b) ? a : b;
+}
 
 void make_texture()
 {
@@ -225,8 +236,12 @@ qword_t* my_draw_line(qword_t* q, int region)
 	unsigned use_aa = (region & 1) == 1;
 	unsigned use_abe = (region & 2) == 2;
 	unsigned alpha_index = (region >> 2) & 3;
-	unsigned alpha_values[4] = { 64, 128, 192, 255 };
-	unsigned color = (alpha_values[alpha_index] << 24) | 0x404040;
+	int alpha_values[4] = { 64, 128, 192, 255 };
+	int vary_amt = VARY_ALPHA ? 2 : 0;
+	unsigned alpha0 = (unsigned)max(alpha_values[alpha_index] - vary_amt, 0);
+	unsigned alpha1 = (unsigned)min(alpha_values[alpha_index] + vary_amt, 255);
+	unsigned color0 = (alpha0 << 24) | 0x404040;
+	unsigned color1 = (alpha1 << 24) | 0x404040;
 
 	const int x = WINDOW_X + TEST_REGION_SIZE * (region % TEST_REGIONS_X);
 	const int y = WINDOW_Y + TEST_REGION_SIZE * (region / TEST_REGIONS_X);
@@ -259,7 +274,7 @@ qword_t* my_draw_line(qword_t* q, int region)
 	PACK_GIFTAG(q, GS_SET_UV(U0, V0), GS_REG_UV);
 	q++;
 	
-  PACK_GIFTAG(q, color, GS_REG_RGBAQ);
+  PACK_GIFTAG(q, color0, GS_REG_RGBAQ);
   q++;
 
   PACK_GIFTAG(q, GS_SET_XYZ(X0, Y0, Z0), GS_REG_XYZ2);
@@ -268,7 +283,7 @@ qword_t* my_draw_line(qword_t* q, int region)
 	PACK_GIFTAG(q, GS_SET_UV(U1, V1), GS_REG_UV);
 	q++;
 
-	PACK_GIFTAG(q, color, GS_REG_RGBAQ);
+	PACK_GIFTAG(q, color1, GS_REG_RGBAQ);
   q++;
 
   PACK_GIFTAG(q, GS_SET_XYZ(X1, Y1, Z1), GS_REG_XYZ2);
@@ -336,7 +351,7 @@ int main(int argc, char *argv[])
 	read_framebuffer(g_z.address, FRAME_WIDTH / 64, 0, 0, FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, g_z_data);
 
 	char filename[64];
-	sprintf(filename, "mass:line_test_9%s.bmp", USE_TEX ? "_tex" : "");
+	sprintf(filename, "mass:line_test_9%s.bmp", VARY_ALPHA ? "_varyalpha" : "");
 
 	if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
 		printf("Failed to write line test data to USB\n");

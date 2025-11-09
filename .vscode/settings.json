@@ -50,6 +50,13 @@
     "functional": "c",
     "tuple": "c",
     "type_traits": "c",
-    "malloc.h": "c"
+    "malloc.h": "c",
+    "bit": "c",
+    "chrono": "c",
+    "istream": "c",
+    "limits": "c",
+    "numeric": "c",
+    "semaphore": "c",
+    "algorithm": "c"
   }
 }
