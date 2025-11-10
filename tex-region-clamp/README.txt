@@ -1,0 +1,1 @@
+The purpose of this test is to test how region clamp mode works when it clamps outside the bounds of the texture.
