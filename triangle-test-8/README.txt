@@ -1,0 +1,1 @@
+Purpose is to draw a few AA1 triangles for initial testing of AA1 implementation.
