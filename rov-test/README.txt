@@ -1,0 +1,1 @@
+Purpose is to draw triangles with standard alpha blending for testing feedback draws in PCSX2.
