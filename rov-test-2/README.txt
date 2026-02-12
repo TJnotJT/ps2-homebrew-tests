@@ -1,0 +1,1 @@
+Purpose is to mimic draws in the game black which overdraws each triangle twice to draw diffus map and then specular map.
