@@ -10,10 +10,13 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: rov-test-2.elf
+all: rov-test-2-light.elf rov-test-2-heavy.elf
 
-rov-test-2.o: rov-test-2.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
+rov-test-2-light.o: rov-test-2.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=0 -c $< -o $@
+
+rov-test-2-heavy.o: rov-test-2.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=1 -c $< -o $@
 
 %.elf: %.o
 	$(DIR_GUARD)

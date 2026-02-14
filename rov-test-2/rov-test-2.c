@@ -27,6 +27,10 @@
 #include <math3d.h>
 #include <math.h>
 
+#ifndef MODE
+#define MODE 0
+#endif
+
 #define COUNTOF(x) (sizeof(x) / sizeof(x[0]))
 
 #define PI 3.141592653589793f
@@ -145,7 +149,7 @@ int abs(int x)
 }
 
 // Perspective/viewport transform. Generated with ChatGPT.
-void transform_vertices(float angle_x, float angle_y)
+void transform_vertices(float cx, float cy, float cz, float angle_x, float angle_y)
 {
     const float fw = (float)FRAME_WIDTH;
     const float fh = (float)FRAME_HEIGHT;
@@ -164,21 +168,25 @@ void transform_vertices(float angle_x, float angle_y)
 			float z = g_cube_vertices[i].z;
 
 			// ---- Rotate around X ----
+			float x1 = x;
 			float y1 = y * cosx - z * sinx;
 			float z1 = y * sinx + z * cosx;
 
 			// ---- Rotate around Y ----
-			float x2 =  x * cosy + z1 * siny;
-			float z2 = -x * siny + z1 * cosy;
+			float x2 = x1 * cosy + z1 * siny;
+			float y2 = y1;
+			float z2 = -x1 * siny + z1 * cosy;
 
-			// ---- Translate forward ----
-			z2 += 2.0f;
+			// ---- Translate by center ----
+			float x3 = x2 + cx;
+			float y3 = y2 + cy;
+			float z3 = z2 + cz;
 
 			// ---- Perspective divide (projection plane at z=1) ----
-			float inv_z = 1.0f / z2;
+			float inv_z = 1.0f / z3;
 
-			float xp = x2 * inv_z;
-			float yp = y1 * inv_z;
+			float xp = x3 * inv_z;
+			float yp = y3 * inv_z;
 
 			// ---- Aspect ratio correction ----
 			xp /= aspect;
@@ -228,7 +236,7 @@ void make_base_texture()
 	FlushCache(0); // Needed for DMA transfer since we generate data on the CPU.
 }
 
-// Texture used for the blend draws. In BLack it's the specular texture.
+// Texture used for the blend draws. In Black it's the specular texture.
 void make_blend_texture()
 {
 	for (int y = 0; y < TEX_HEIGHT; y++)
@@ -240,16 +248,16 @@ void make_blend_texture()
 			// Checkerboard for the blending texture
 			if (((x / 16) + (y / 16)) & 1)
 			{
-				g_texture_data[TEX_BLEND][i + 0] = 0x40;
-				g_texture_data[TEX_BLEND][i + 1] = 0x40;
-				g_texture_data[TEX_BLEND][i + 2] = 0x40;
+				g_texture_data[TEX_BLEND][i + 0] = 0x20;
+				g_texture_data[TEX_BLEND][i + 1] = 0x20;
+				g_texture_data[TEX_BLEND][i + 2] = 0x20;
 				g_texture_data[TEX_BLEND][i + 3] = 0xFF;
 			}
 			else
 			{
-				g_texture_data[TEX_BLEND][i + 0] = 0x80;
-				g_texture_data[TEX_BLEND][i + 1] = 0x80;
-				g_texture_data[TEX_BLEND][i + 2] = 0x80;
+				g_texture_data[TEX_BLEND][i + 0] = 0x40;
+				g_texture_data[TEX_BLEND][i + 1] = 0x40;
+				g_texture_data[TEX_BLEND][i + 2] = 0x40;
 				g_texture_data[TEX_BLEND][i + 3] = 0xFF;
 			}
 		}
@@ -437,23 +445,23 @@ qword_t* my_draw_cube(qword_t* q)
 {
 	const int tris = COUNTOF(g_cube_indices) / 3;
 
-	PACK_GIFTAG(q, GIF_SET_TAG(N_CTX * 10 * tris, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+	PACK_GIFTAG(q, GIF_SET_TAG(N_CTX * (1 + 9 * tris), 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
   q++;
 
-	for (int i = 0; i < tris; i++)
+	for (int j = 0; j < N_CTX; j++)
 	{
-		for (int j = 0; j < N_CTX; j++)
-		{
-			// Switch contexts every triangle
-			PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_TRIANGLE, 0, 1, 0, 1, 0, 0, j, 0), GIF_REG_PRIM);
-			q++;
+		// Switch contexts every cube
+		PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_TRIANGLE, 0, 1, 0, 1, 0, 0, j, 0), GIF_REG_PRIM);
+		q++;
 
+		for (int i = 0; i < tris; i++)
+		{
 			for (int k = 0; k < 3; k++)
 			{
 				const my_vertex_t* v = &g_cube_vertices_transformed[g_cube_indices[3 * i + k]];
 
-				const int x = (WINDOW_X << 4) + (int)(v->x * 16.0f) % (FRAME_WIDTH << 4);
-				const int y = (WINDOW_Y << 4) + (int)(v->y * 16.0f) % (FRAME_HEIGHT << 4);
+				const int x = (WINDOW_X << 4) + (int)(v->x * 16.0f);
+				const int y = (WINDOW_Y << 4) + (int)(v->y * 16.0f);
 				const int z = (int)(v->z * (float)((1 << 24) - 1));
 
 				union
@@ -542,10 +550,35 @@ int render_test()
 	q = setup_clear_env(q);
 	q = my_draw_clear(q, 0, 0);
 
-	transform_vertices(45.0f, 45.0f);
-
 	q = setup_drawing_env(q);
+
+#if MODE == 0
+	// Light: just one cube.
+	transform_vertices(0.0f, 0.0f, 2.0f, 45.0f, 45.0f);
+
 	q = my_draw_cube(q);
+#else
+	// Heavy: a lot of cubes.
+	for (int i = 0; i < 5; i++)
+	{
+		for (int j = 0; j < 11; j++)
+		{
+			for (int k = 0; k < 7; k++)
+			{
+				transform_vertices(1.25f * (float)(j - 5), 1.25f * (float)(k - 3), 1.25f * (float)(7 - i), 0.0f, 0.0f);
+
+				q = my_draw_cube(q);
+			}
+		}
+
+		if (q - packet >= 65536 / 2)
+		{
+			dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+			dma_channel_wait(DMA_CHANNEL_GIF, 0);
+			q = packet;
+		}
+	}
+#endif
 
 	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 	dma_channel_wait(DMA_CHANNEL_GIF, 0);
