@@ -28,7 +28,7 @@
 
 #define SAVE_MODE_DISABLE 0
 #define SAVE_MODE_VSYNC 1
-#define SAVE_MODE_TRANSFER 2
+#define SAVE_MODE_PACKET 2
 
 #define DEBUG_FRAME_WIDTH 512
 #define DEBUG_FRAME_HEIGHT 256
@@ -597,6 +597,7 @@ void run_gs_dump(u32 loops)
 
     gs_set_state(gs_dump_state, gs_dump_header.state_version);
 
+		u32 packet = 0;
     u32 vsync = 0;
     while (!my_read_eof())
     {
@@ -622,7 +623,7 @@ void run_gs_dump(u32 loops)
         case GS_DUMP_VSYNC:
         {
 
-					if (vsync == save_num)
+					if (save_mode == SAVE_MODE_VSYNC && vsync == save_num)
 					{
 						return;
 					}
@@ -655,6 +656,12 @@ void run_gs_dump(u32 loops)
           break;
         }
       }
+
+			packet++;
+			if (save_mode == SAVE_MODE_PACKET && packet == save_num)
+			{
+				return;
+			}
     }
 		loop++;
   }
@@ -805,8 +812,8 @@ void settings_read_mode(const char** buffer_in)
 		save_mode = SAVE_MODE_DISABLE;
 	else if (strcmp(buffer, "vsync") == 0)
 		save_mode = SAVE_MODE_VSYNC;
-	else if (strcmp(buffer, "transfer") == 0)
-		save_mode = SAVE_MODE_TRANSFER;
+	else if (strcmp(buffer, "packet") == 0)
+		save_mode = SAVE_MODE_PACKET;
 	else
 		PRINTF("Unknown mode: %s\n", buffer);
 	PRINTF("Set mode to %d\n", save_mode);
