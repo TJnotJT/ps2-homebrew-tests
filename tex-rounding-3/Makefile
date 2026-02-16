@@ -6,34 +6,22 @@
 # Licenced under Academic Free License version 2.0
 # Review ps2sdk README & LICENSE files for further details.
 
+TW ?= 9
+TBW ?= 8
+OFF ?= 0
+FRAC ?= 0
+REV ?= 0
+
+OUT := tex-rounding-3-tw$(TW)-tbw$(TBW)-off$(OFF)-frac$(FRAC)-rev$(REV)
+
 include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: \
-tex-rounding-3-tw9-tbw8-off0-frac0-for.elf \
-tex-rounding-3-tw8-tbw8-off0-frac0-for.elf \
-tex-rounding-3-tw8-tbw4-off0-frac0-for.elf \
-tex-rounding-3-tw9-tbw8-off0-frac1-for.elf \
-tex-rounding-3-tw9-tbw8-off0-frac0-rev.elf
+all: $(OUT).elf
 
-tex-rounding-3-tw9-tbw8-off0-frac0-for.o: tex-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=0 -c $< -o $@
-
-tex-rounding-3-tw9-tbw8-off0-frac0-rev.o: tex-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=1 -c $< -o $@
-
-tex-rounding-3-tw9-tbw8-off0-frac1-for.o: tex-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=1 -DREV=0 -c $< -o $@
-
-tex-rounding-3-tw9-tbw8-off0-frac1-for.o: tex-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=1 -DREV=0 -c $< -o $@
-
-tex-rounding-3-tw8-tbw8-off0-frac0-for.o: tex-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=8 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=0 -c $< -o $@
-
-tex-rounding-3-tw8-tbw4-off0-frac0-for.o: tex-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=8 -DTBW=4 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=0 -c $< -o $@
+$(OUT).o: tex-rounding-3.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=$(TW) -DTBW=$(TBW) -DOFFSET_U=$(OFF) -DOFFSET_FRAC=$(FRAC) -DREV=$(REV) -c $< -o $@
 
 %.elf: %.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)
@@ -44,7 +32,7 @@ ifdef DEST_DIR
 endif
 
 clean:
-	rm -f tex-rounding-3.elf tex-rounding-3.o
+	rm -f *.elf *.o
 
 include $(PS2SDK)/samples/Makefile.pref
 include $(PS2SDK)/samples/Makefile.eeglobal
