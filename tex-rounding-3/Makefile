@@ -10,18 +10,38 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: tex-rounding-3.elf
+all: \
+tex-rounding-3-tw9-tbw8-off0-frac0-for.elf \
+tex-rounding-3-tw8-tbw8-off0-frac0-for.elf \
+tex-rounding-3-tw8-tbw4-off0-frac0-for.elf \
+tex-rounding-3-tw9-tbw8-off0-frac1-for.elf \
+tex-rounding-3-tw9-tbw8-off0-frac0-rev.elf
 
-tex-rounding-3.elf: tex-rounding-3.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
+tex-rounding-3-tw9-tbw8-off0-frac0-for.o: tex-rounding-3.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=0 -c $< -o $@
+
+tex-rounding-3-tw9-tbw8-off0-frac0-rev.o: tex-rounding-3.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=1 -c $< -o $@
+
+tex-rounding-3-tw9-tbw8-off0-frac1-for.o: tex-rounding-3.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=1 -DREV=0 -c $< -o $@
+
+tex-rounding-3-tw9-tbw8-off0-frac1-for.o: tex-rounding-3.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=9 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=1 -DREV=0 -c $< -o $@
+
+tex-rounding-3-tw8-tbw8-off0-frac0-for.o: tex-rounding-3.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=8 -DTBW=8 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=0 -c $< -o $@
+
+tex-rounding-3-tw8-tbw4-off0-frac0-for.o: tex-rounding-3.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=8 -DTBW=4 -DOFFSET_U=0 -DOFFSET_FRAC=0 -DREV=0 -c $< -o $@
+
+%.elf: %.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)
 	$(EE_CC) -T$(EE_LINKFILE) $(EE_OPTFLAGS) -o $@ $^ $(EE_LDFLAGS) $(EXTRA_LDFLAGS) $(EE_LIBS)
 	$(EE_STRIP) --strip-all $@
 ifdef DEST_DIR
 	cp $@ $(DEST_DIR)
 endif
-
-tex-rounding-3.o: tex-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -c $< -o $@
 
 clean:
 	rm -f tex-rounding-3.elf tex-rounding-3.o

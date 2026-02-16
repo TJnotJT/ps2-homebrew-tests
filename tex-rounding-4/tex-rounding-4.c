@@ -31,32 +31,12 @@
 #include "../lib-read-fb/read-fb.h"
 #include "../lib-common/common.h"
 
-#ifndef REV
-#define REV 0
-#endif
-
-#ifndef OFFSET_U
-#define OFFSET_U 0
-#endif
-
-#ifndef OFFSET_FRAC
-#define OFFSET_FRAC 0
-#endif
-
-#ifndef TW
-#define TW 4
-#endif
-
-#ifndef TBW
-#define TBW 1
-#endif
-
 #define FRAME_WIDTH 1024
 #define FRAME_HEIGHT 256
-#define WINDOW_X 0
-#define WINDOW_Y 0
-#define TEX_BUFF_WIDTH (64 * (TBW))
-#define TEX_WIDTH (1 << (TW))
+#define WINDOW_X (2048 - FRAME_WIDTH / 2)
+#define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
+#define TEX_BUFF_WIDTH 512
+#define TEX_WIDTH 512
 #define TEX_HEIGHT 32
 
 framebuffer_t g_frame; // Frame buffer
@@ -114,11 +94,11 @@ void init_gs()
 	g_z.mask = 1;
 	g_z.method = ZTEST_METHOD_ALLPASS;
 	g_z.zsm = GS_PSMZ_32;
-	g_z.address = 0;
+	g_z.address = graph_vram_allocate(FRAME_WIDTH, FRAME_HEIGHT, g_z.zsm, GRAPH_ALIGN_PAGE);
 
 	g_tex.width = TEX_BUFF_WIDTH;
 	g_tex.psm = GS_PSM_32;
-	g_tex.address = graph_vram_allocate(g_tex.width, TEX_HEIGHT, GS_PSM_32, GRAPH_ALIGN_BLOCK);
+	g_tex.address = graph_vram_allocate(g_tex.width, 32, GS_PSM_32, GRAPH_ALIGN_BLOCK);
 
 	g_tex.info.width = draw_log2(TEX_WIDTH);
 	g_tex.info.height = draw_log2(TEX_HEIGHT);
@@ -237,24 +217,17 @@ qword_t* my_draw_line(qword_t* q, int region)
 	PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_LINE, 0, 1, 0, 0, 0, 1, 0, 0), GS_REG_PRIM);
 	q++;
 
-	u32 x0 = (WINDOW_X << 4) + OFFSET_FRAC;
-	u32 x1 = ((WINDOW_X + (region + 1)) << 4) + OFFSET_FRAC;
+	u32 x0 = WINDOW_X << 4;
+	u32 x1 = (WINDOW_X + 2 * (region + 1)) << 4;
 	u32 y0 = (WINDOW_Y + (region % 256)) << 4;
 	u32 y1 = (WINDOW_Y + (region % 256)) << 4;
 	u32 z0 = 0;
 	u32 z1 = 0;
 	
-	u32 u0 = (OFFSET_U << 4) + OFFSET_FRAC;
-	u32 u1 = ((region + 1 + OFFSET_U) << 4) + OFFSET_FRAC;
+	u32 u0 = 1 << 4;
+	u32 u1 = (region + 1) << 4;
 	u32 v0 = 8;
 	u32 v1 = 8;
-
-	if (REV)
-	{
-		u32 tmp = u0;
-		u0 = u1;
-		u1 = tmp;
-	}
 
 	color_t rgba;
 	rgba.a = 0xFF;
@@ -325,8 +298,7 @@ void save_image(int part)
 
   char filename[64];
   
-  sprintf(filename, "mass:tex-rounding-3-tw%d-tbw%d-off%d-frac%d-%s-%d.bmp",
-		TW, TBW, OFFSET_U, OFFSET_FRAC, REV ? "rev" : "for", part);
+  sprintf(filename, "mass:tex-rounding-4-%d.bmp", part);
 
   if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
   {
