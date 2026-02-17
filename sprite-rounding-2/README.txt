@@ -1,0 +1,1 @@
+The purpose of this test is to test how UVs on the boundary of texels are rounded. The X deltas are the same as U.
