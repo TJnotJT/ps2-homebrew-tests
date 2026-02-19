@@ -10,13 +10,22 @@ include ../Makefile.destdir
 
 EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 
-all: rov-test-2-light.elf rov-test-2-heavy.elf
+all: rov-test-2-light-blend-zmask.elf \
+rov-test-2-heavy-blend-zmask.elf \
+rov-test-2-heavy-noblend-zmask.elf \
+rov-test-2-heavy-noblend-nozmask.elf
 
-rov-test-2-light.o: rov-test-2.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=0 -c $< -o $@
+rov-test-2-light-blend-zmask.o: rov-test-2.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=0 -DBLEND=1 -DZMASK=1 -c $< -o $@
 
-rov-test-2-heavy.o: rov-test-2.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=1 -c $< -o $@
+rov-test-2-heavy-blend-zmask.o: rov-test-2.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=1 -DBLEND=1 -DZMASK=1 -c $< -o $@
+
+rov-test-2-heavy-noblend-zmask.o: rov-test-2.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=1 -DBLEND=0 -DZMASK=1 -c $< -o $@
+
+rov-test-2-heavy-noblend-nozmask.o: rov-test-2.c
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DMODE=1 -DBLEND=0 -DZMASK=0 -c $< -o $@
 
 %.elf: %.o
 	$(DIR_GUARD)

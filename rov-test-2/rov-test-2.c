@@ -31,6 +31,14 @@
 #define MODE 0
 #endif
 
+#ifndef BLEND
+#define BLEND 1
+#endif
+
+#ifndef ZMASK
+#define ZMASK 1
+#endif
+
 #define COUNTOF(x) (sizeof(x) / sizeof(x[0]))
 
 #define PI 3.141592653589793f
@@ -386,7 +394,7 @@ void init_gs()
 
 	// Mask Z by using ALLFAIL alpha test and setting AFAIL to KEEP_ZBUFFER
 	g_atest[CTX_BLEND].compval = 0;
-	g_atest[CTX_BLEND].enable = DRAW_ENABLE;
+	g_atest[CTX_BLEND].enable = ZMASK ? DRAW_ENABLE : DRAW_DISABLE;
 	g_atest[CTX_BLEND].keep = ATEST_KEEP_ZBUFFER;
 	g_atest[CTX_BLEND].method = ATEST_METHOD_ALLFAIL;
 
@@ -451,7 +459,7 @@ qword_t* my_draw_cube(qword_t* q)
 	for (int j = 0; j < N_CTX; j++)
 	{
 		// Switch contexts every cube
-		PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_TRIANGLE, 0, 1, 0, 1, 0, 0, j, 0), GIF_REG_PRIM);
+		PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_TRIANGLE, 0, 1, 0, !!BLEND, 0, 0, j, 0), GIF_REG_PRIM);
 		q++;
 
 		for (int i = 0; i < tris; i++)
