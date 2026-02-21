@@ -1,0 +1,1 @@
+The purpose of this test is to test how UVs on the boundary of texels are rounded. We draw quads in a bunch of small cells with different dimensions.
