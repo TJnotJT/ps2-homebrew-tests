@@ -14,8 +14,9 @@ REV ?= 0
 ROT ?= 0
 SHF ?= 0
 CLMP ?= 0
+TRI ?= 0
 
-OUT := sprite-rounding-2-tw$(TW)-tbw$(TBW)-off$(OFF)-frac$(FRAC)-rev$(REV)-rot$(ROT)-shf$(SHF)-clmp$(CLMP)
+OUT := sprite-rounding-2-tw$(TW)-tbw$(TBW)-off$(OFF)-frac$(FRAC)-rev$(REV)-rot$(ROT)-shf$(SHF)-clmp$(CLMP)-tri$(TRI)
 
 include ../Makefile.destdir
 
@@ -25,7 +26,7 @@ all: $(OUT).elf
 
 $(OUT).o: sprite-rounding-2.c
 	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=$(TW) -DTBW=$(TBW) -DOFFSET_U=$(OFF) -DOFFSET_FRAC=$(FRAC) -DREV=$(REV) -DROT=$(ROT) \
-	-DSHF=$(SHF) -DCLMP=$(CLMP) -c $< -o $@
+	-DSHF=$(SHF) -DCLMP=$(CLMP) -DTRI=$(TRI) -c $< -o $@
 
 %.elf: %.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)

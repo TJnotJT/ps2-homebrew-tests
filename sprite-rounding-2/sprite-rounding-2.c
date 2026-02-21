@@ -74,6 +74,11 @@
 #define FRAME_WIDTH 1024
 #define FRAME_HEIGHT 256
 #endif
+
+#ifndef TRI
+#define TRI 0
+#endif
+
 #define WINDOW_X 0
 #define WINDOW_Y 0
 #define TEX_BUFF_WIDTH (64 * (TBW))
@@ -255,12 +260,12 @@ void my_draw_clear_send(unsigned rgb)
 	free(packet);
 }
 
-qword_t* m_draw_sprite(qword_t* q, int region_x, int region_y)
+qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 {
-	PACK_GIFTAG(q, GIF_SET_TAG(6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+	PACK_GIFTAG(q, GIF_SET_TAG(TRI ? 10 : 6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
 	q++;
 
-	PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), GS_REG_PRIM);
+	PACK_GIFTAG(q, GS_SET_PRIM(TRI ? GS_PRIM_TRIANGLE_STRIP : GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), GS_REG_PRIM);
 	q++;
 
 	u32 cx = region_x * REGION_SIZE_X;
@@ -320,6 +325,24 @@ qword_t* m_draw_sprite(qword_t* q, int region_x, int region_y)
 	PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
 	q++;
 
+	if (TRI)
+	{
+		PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+		q++;
+
+		PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
+		q++;
+	}
+
+	if (TRI)
+	{
+		PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
+		q++;
+
+		PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
+		q++;
+	}
+
 	PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
 	q++;
 
@@ -356,7 +379,7 @@ int render_test()
 	{
 		for (int j = 0; j < NREGION_Y; j++)
 		{
-			q = m_draw_sprite(q, i, j);
+			q = my_draw_sprite(q, i, j);
 		}
 	}
 
@@ -376,8 +399,8 @@ void save_image()
 
   char filename[128];
   
-  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-off%d-frac%d-rev%d-rot%d-shf%d-clmp%d.bmp",
-		TW, TBW, OFFSET_U, OFFSET_FRAC, REV, ROT, SHF, CLMP);
+  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-off%d-frac%d-rev%d-rot%d-shf%d-clmp%d-tri%d.bmp",
+		TW, TBW, OFFSET_U, OFFSET_FRAC, REV, ROT, SHF, CLMP, TRI);
 
   if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
   {
