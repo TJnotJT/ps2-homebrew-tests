@@ -47,14 +47,6 @@
 #define REV 0
 #endif
 
-#ifndef FRACXU
-#define FRACXU 0
-#endif
-
-#ifndef FRACYV
-#define FRACYV 0
-#endif
-
 #ifndef TW
 #define TW 4
 #endif
@@ -71,9 +63,10 @@
 #define FRAME_HEIGHT 256
 #endif
 
-#ifndef TRI
-#define TRI 0
-#endif
+int TRI = 0;
+int FRACXU = 0;
+int FRACYV = 0;
+int DIAG  = 0;
 
 #define WINDOW_X 0
 #define WINDOW_Y 0
@@ -99,13 +92,13 @@ u8 texture_data[TEX_SIZE * TEX_SIZE * 4] __attribute__((aligned(64)));
 // Checkerboard texture
 void make_texture()
 {
-	for (int i = 0; i < TEX_SIZE; i++)
+	for (int y = 0; y < TEX_SIZE; y++)
 	{
-		for (int j = 0; j < TEX_SIZE; j++)
+		for (int x = 0; x < TEX_SIZE; x++)
 		{
-			int addr = ROT ? (j * TEX_SIZE + i) : (i * TEX_SIZE + j);
-			texture_data[4 * addr + 0] = (i & 1) ? 255 : 128; // R
-			texture_data[4 * addr + 1] = (j & 1) ? 255 : 128; // G
+			int addr = ROT ? (x * TEX_SIZE + y) : (y * TEX_SIZE + x);
+			texture_data[4 * addr + 0] = (x & 1) ? 255 : 128; // R
+			texture_data[4 * addr + 1] = (y & 1) ? 255 : 128; // G
 			texture_data[4 * addr + 2] = 0; // B
 			texture_data[4 * addr + 3] = 0xFF; // A
 		}
@@ -315,35 +308,75 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 	PACK_GIFTAG(q, rgba.rgbaq, GIF_REG_RGBAQ);
 	q++;
 
-	PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
-	q++;
-
-	PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
-	q++;
-
-	if (TRI)
+	if (TRI == 0)
 	{
-		PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+		PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
 		q++;
 
-		PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
+		PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
+		q++;
+
+		PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+		q++;
+
+		PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
 		q++;
 	}
-
-	if (TRI)
+	else
 	{
-		PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
-		q++;
+		if (DIAG == 0)
+		{
+			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+			q++;
 
-		PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
-		q++;
+			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
+			q++;
+		}
+		else
+		{
+			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
+			q++;
+		}
 	}
-
-	PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
-	q++;
-
-	PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
-	q++;
 
 	return q;
 }
@@ -395,8 +428,8 @@ void save_image()
 
   char filename[128];
   
-  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-fxu%d-fyv%d-rev%d-rot%d-clmp%d-tri%d.bmp",
-		TW, TBW, FRACXU, FRACYV, REV, ROT, CLMP, TRI);
+  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-fxu%d-fyv%d-rev%d-rot%d-clmp%d-tri%d-diag%d.bmp",
+		TW, TBW, FRACXU, FRACYV, REV, ROT, CLMP, TRI, DIAG);
 
   if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
   {
@@ -414,9 +447,20 @@ int main(int argc, char *argv[])
 
 	load_texture(&g_tex);
 
-	render_test();
-
-	save_image();
+	for (TRI = 0; TRI <= 1; TRI++)
+	{
+		for (FRACXU = 0; FRACXU <= 8; FRACXU += 8)
+		{
+			for (FRACYV = 0; FRACYV <= 8; FRACYV += 8)
+			{
+				for (DIAG = 0; DIAG <= 1; DIAG++)
+				{
+					render_test();
+					save_image();
+				}
+			}
+		}
+	}
 
   SleepThread();
 

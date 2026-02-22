@@ -8,14 +8,11 @@
 
 TW ?= 9
 TBW ?= 8
-FRACXU ?= 0
-FRACYV ?= 0
 REV ?= 0
 ROT ?= 0
 CLMP ?= 0
-TRI ?= 0
 
-OUT := sprite-rounding-3-tw$(TW)-tbw$(TBW)-fxu$(FRACXU)-fyu$(FRACYV)-rev$(REV)-rot$(ROT)-clmp$(CLMP)-tri$(TRI)
+OUT := sprite-rounding-3-tw$(TW)-tbw$(TBW)-rev$(REV)-rot$(ROT)-clmp$(CLMP)
 
 include ../Makefile.destdir
 
@@ -24,8 +21,7 @@ EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 all: $(OUT).elf
 
 $(OUT).o: sprite-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=$(TW) -DTBW=$(TBW) -DFRACXU=$(FRACXU) -DFRACYV=$(FRACYV) -DREV=$(REV) -DROT=$(ROT) \
-	-DCLMP=$(CLMP) -DTRI=$(TRI) -c $< -o $@
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=$(TW) -DTBW=$(TBW) -DREV=$(REV) -DROT=$(ROT) -DCLMP=$(CLMP) -c $< -o $@
 
 %.elf: %.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)
