@@ -55,13 +55,6 @@
 #define TBW 1
 #endif
 
-#if ROT
-#define FRAME_WIDTH 256
-#define FRAME_HEIGHT 1024
-#else
-#define FRAME_WIDTH 1024
-#define FRAME_HEIGHT 256
-#endif
 
 int TRI = 0;
 int FRACXU = 0;
@@ -73,8 +66,10 @@ int DIAG  = 0;
 #define TEX_BUFF_WIDTH (64 * (TBW))
 #define TEX_SIZE (1 << (TW))
 #define TEX_SIZE (1 << (TW))
-#define REGION_SIZE_X 32
-#define REGION_SIZE_Y 16
+#define FRAME_WIDTH ((ROT) ? 256 : 1024)
+#define FRAME_HEIGHT ((ROT) ? 1024 : 256)
+#define REGION_SIZE_X ((ROT) ? 16 : 32)
+#define REGION_SIZE_Y ((ROT) ? 32 : 16)
 #define NREGION_X (FRAME_WIDTH / REGION_SIZE_X)
 #define NREGION_Y (FRAME_HEIGHT / REGION_SIZE_Y)
 
@@ -251,10 +246,10 @@ void my_draw_clear_send(unsigned rgb)
 
 qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 {
-	PACK_GIFTAG(q, GIF_SET_TAG(TRI ? 10 : 6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+	PACK_GIFTAG(q, GIF_SET_TAG(TRI ? 14 : 6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
 	q++;
 
-	PACK_GIFTAG(q, GS_SET_PRIM(TRI ? GS_PRIM_TRIANGLE_STRIP : GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), GS_REG_PRIM);
+	PACK_GIFTAG(q, GS_SET_PRIM(TRI ? GS_PRIM_TRIANGLE : GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), GS_REG_PRIM);
 	q++;
 
 	u32 cx = region_x * REGION_SIZE_X;
@@ -277,24 +272,9 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 		u32 tmp = u0;
 		u0 = u1;
 		u1 = tmp;
-	}
 
-	if (ROT)
-	{
-		u32 tmp = x0;
-		x0 = y0;
-		y0 = tmp;
-
-		tmp = x1;
-		x1 = y1;
-		y1 = tmp;
-
-		tmp = u0;
-		u0 = v0;
-		v0 = tmp;
-
-		tmp = u1;
-		u1 = v1;
+		tmp = v0;
+		v0 = v1;
 		v1 = tmp;
 	}
 
@@ -326,12 +306,7 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 	{
 		if (DIAG == 0)
 		{
-			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
-			q++;
-
-			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
-			q++;
-
+			// First tri
 			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
 			q++;
 
@@ -344,20 +319,34 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
 			q++;
 
+			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
+			q++;
+
+			// Second tri
+			PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z1), GIF_REG_XYZ2);
+			q++;
+
 			PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z0), GIF_REG_XYZ2);
 			q++;
 		}
 		else
 		{
-			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
-			q++;
-
-			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
-			q++;
-
+			// First tri
 			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
 			q++;
 
@@ -368,6 +357,25 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
+			q++;
+
+			// Second tri
+			PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+			q++;
+
+			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
