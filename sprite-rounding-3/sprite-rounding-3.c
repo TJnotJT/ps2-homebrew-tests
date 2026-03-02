@@ -55,6 +55,17 @@
 #define TBW 1
 #endif
 
+#ifndef SCL
+#define SCL ((float)1)
+#endif
+
+#define SWAP(x, y) \
+do                 \
+{                  \
+	u32 tmp = x;     \
+	x = y;           \
+	y = tmp;         \
+} while (0)
 
 int TRI = 0;
 int FRACXU = 0;
@@ -255,27 +266,44 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 	u32 cx = region_x * REGION_SIZE_X;
 	u32 cy = region_y * REGION_SIZE_Y;
 
+	u32 dx = region_x + 1;
+	u32 dy = region_y + 1;
+	u32 du = (u32)(SCL * dx);
+	u32 dv = (u32)(SCL * dy);
+
 	u32 x0 = ((WINDOW_X + cx) << 4) + FRACXU;
-	u32 x1 = ((WINDOW_X + region_x + cx + 1) << 4) + FRACXU;
+	u32 x1 = ((WINDOW_X + dx + cx) << 4) + FRACXU;
 	u32 y0 = ((WINDOW_Y + cy) << 4) + FRACYV;
-	u32 y1 = ((WINDOW_Y + region_y + cy + 1) << 4) + FRACYV;
+	u32 y1 = ((WINDOW_Y + dy + cy) << 4) + FRACYV;
 	u32 z0 = 0;
 	u32 z1 = 0;
 	
 	u32 u0 = FRACXU;
-	u32 u1 = ((region_x + 1) << 4) + FRACXU;
+	u32 u1 = (du << 4) + FRACXU;
 	u32 v0 = FRACYV;
-	u32 v1 = ((region_y + 1) << 4) + FRACYV;
+	u32 v1 = (dv << 4) + FRACYV;
 
-	if (REV)
+	if (REV & 1)
 	{
-		u32 tmp = u0;
-		u0 = u1;
-		u1 = tmp;
+		SWAP(u0, u1);
+		SWAP(v0, v1);
+	}
+	
+	if (REV & 2)
+	{
+		SWAP(x0, x1);
+		SWAP(y0, y1);
+	}
 
-		tmp = v0;
-		v0 = v1;
-		v1 = tmp;
+	if (REV & 4)
+	{
+		SWAP(y0, y1);
+		SWAP(v0, v1);
+	}
+
+	if (REV & 8)
+	{
+		SWAP(v0, v1);
 	}
 
 	color_t rgba;
@@ -436,8 +464,8 @@ void save_image()
 
   char filename[128];
   
-  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-fxu%d-fyv%d-rev%d-rot%d-clmp%d-tri%d-diag%d.bmp",
-		TW, TBW, FRACXU, FRACYV, REV, ROT, CLMP, TRI, DIAG);
+  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-fxu%d-fyv%d-rev%d-rot%d-clmp%d-tri%d-diag%d-scl%f.bmp",
+		TW, TBW, FRACXU, FRACYV, REV, ROT, CLMP, TRI, DIAG, ((float)SCL));
 
   if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
   {
@@ -457,9 +485,9 @@ int main(int argc, char *argv[])
 
 	for (TRI = 0; TRI <= 1; TRI++)
 	{
-		for (FRACXU = 0; FRACXU <= 8; FRACXU += 8)
+		for (FRACXU = 0; FRACXU <= 0 /* 8 */ ; FRACXU += 8)
 		{
-			for (FRACYV = 0; FRACYV <= 8; FRACYV += 8)
+			for (FRACYV = 0; FRACYV <= 0 /* 8 */ ; FRACYV += 8)
 			{
 				for (DIAG = 0; DIAG <= 1; DIAG++)
 				{

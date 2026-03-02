@@ -11,8 +11,9 @@ TBW ?= 8
 REV ?= 0
 ROT ?= 0
 CLMP ?= 0
+SCL ?= 1
 
-OUT := sprite-rounding-3-tw$(TW)-tbw$(TBW)-rev$(REV)-rot$(ROT)-clmp$(CLMP)
+OUT := sprite-rounding-3-tw$(TW)-tbw$(TBW)-rev$(REV)-rot$(ROT)-clmp$(CLMP)-scl$(SCL)
 
 include ../Makefile.destdir
 
@@ -21,7 +22,7 @@ EE_LIBS = -lkernel -ldraw -lgraph -lmath3d -ldma -lpatches
 all: $(OUT).elf
 
 $(OUT).o: sprite-rounding-3.c
-	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=$(TW) -DTBW=$(TBW) -DREV=$(REV) -DROT=$(ROT) -DCLMP=$(CLMP) -c $< -o $@
+	$(EE_C_COMPILE) $(EE_CFLAGS) -DTW=$(TW) -DTBW=$(TBW) -DREV=$(REV) -DROT=$(ROT) -DCLMP=$(CLMP) -DSCL=$(SCL) -c $< -o $@
 
 %.elf: %.o ../lib-bmp/lib-bmp.a ../lib-usb/lib-usb.a ../lib-read-fb/lib-read-fb.a
 	$(DIR_GUARD)
