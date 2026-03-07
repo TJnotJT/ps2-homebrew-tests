@@ -59,6 +59,14 @@
 #define SCL ((float)1)
 #endif
 
+#ifndef FST
+#define FST 1
+#endif
+
+#ifndef BILN
+#define BILN 0
+#endif
+
 #define SWAP(x, y) \
 do                 \
 {                  \
@@ -159,8 +167,8 @@ void init_gs()
 
 	g_lod.calculation = LOD_USE_K;
 	g_lod.max_level = 0;
-	g_lod.mag_filter = LOD_MAG_NEAREST;
-	g_lod.min_filter = LOD_MIN_NEAREST;
+	g_lod.mag_filter = BILN ? LOD_MAG_LINEAR : LOD_MAG_NEAREST;
+	g_lod.min_filter = BILN ? LOD_MIN_LINEAR : LOD_MIN_NEAREST;
 	g_lod.l = 0;
 	g_lod.k = 0;
 
@@ -255,12 +263,24 @@ void my_draw_clear_send(unsigned rgb)
 	free(packet);
 }
 
+u64 get_tex_reg(u32 u, u32 v)
+{
+#if FST == 1
+	return GIF_SET_UV(u, v);
+#else
+	texel_t tex;
+	tex.s = ((float)u) / (16.0f * (float)TEX_SIZE);
+	tex.t = ((float)v) / (16.0f * (float)TEX_SIZE);
+	return tex.uv;
+#endif
+}
+
 qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 {
 	PACK_GIFTAG(q, GIF_SET_TAG(TRI ? 14 : 6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
 	q++;
 
-	PACK_GIFTAG(q, GS_SET_PRIM(TRI ? GS_PRIM_TRIANGLE : GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), GS_REG_PRIM);
+	PACK_GIFTAG(q, GS_SET_PRIM(TRI ? GS_PRIM_TRIANGLE : GS_PRIM_SPRITE, 0, 1, 0, 0, 0, FST, 0, 0), GS_REG_PRIM);
 	q++;
 
 	u32 cx = region_x * REGION_SIZE_X;
@@ -316,15 +336,17 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 	PACK_GIFTAG(q, rgba.rgbaq, GIF_REG_RGBAQ);
 	q++;
 
+	u32 tex_reg_id = FST ? GIF_REG_UV : GIF_REG_ST;
+
 	if (TRI == 0)
 	{
-		PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+		PACK_GIFTAG(q, get_tex_reg(u0, v0), tex_reg_id);
 		q++;
 
 		PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
 		q++;
 
-		PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+		PACK_GIFTAG(q, get_tex_reg(u1, v1), tex_reg_id);
 		q++;
 
 		PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
@@ -335,38 +357,38 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 		if (DIAG == 0)
 		{
 			// First tri
-			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u1, v0), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u0, v1), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u0, v0), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
 			q++;
 
 			// Second tri
-			PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u0, v1), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u1, v0), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z1), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u1, v1), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z0), GIF_REG_XYZ2);
@@ -375,38 +397,38 @@ qword_t* my_draw_sprite(qword_t* q, int region_x, int region_y)
 		else
 		{
 			// First tri
-			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u0, v0), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u1, v1), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u1, v0), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u1, v0), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y0, z0), GIF_REG_XYZ2);
 			q++;
 
 			// Second tri
-			PACK_GIFTAG(q, GIF_SET_UV(u1, v1), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u1, v1), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x1, y1, z1), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u0, v0), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u0, v0), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y0, z0), GIF_REG_XYZ2);
 			q++;
 
-			PACK_GIFTAG(q, GIF_SET_UV(u0, v1), GIF_REG_UV);
+			PACK_GIFTAG(q, get_tex_reg(u0, v1), tex_reg_id);
 			q++;
 
 			PACK_GIFTAG(q, GIF_SET_XYZ(x0, y1, z0), GIF_REG_XYZ2);
@@ -464,8 +486,8 @@ void save_image()
 
   char filename[128];
   
-  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-fxu%d-fyv%d-rev%d-rot%d-clmp%d-tri%d-diag%d-scl%f.bmp",
-		TW, TBW, FRACXU, FRACYV, REV, ROT, CLMP, TRI, DIAG, ((float)SCL));
+  sprintf(filename, "mass:" PREFIX "-tw%d-tbw%d-fxu%d-fyv%d-rev%d-rot%d-clmp%d-tri%d-diag%d-scl%.2f-fst%d-biln%d.bmp",
+		TW, TBW, FRACXU, FRACYV, REV, ROT, CLMP, TRI, DIAG, ((float)SCL), FST, BILN);
 
   if (write_bmp_to_usb(filename, g_frame_data, FRAME_WIDTH, FRAME_HEIGHT, g_frame.psm, my_draw_clear_send) != 0)
   {
