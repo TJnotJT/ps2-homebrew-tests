@@ -464,12 +464,23 @@ void gs_set_state(u8* data_ptr, u32 version)
 	data_ptr += sizeof(u32); // m_tr.x
 	data_ptr += sizeof(u32); // m_tr.y
 
+	if (version >= 9)
+	{
+		data_ptr += sizeof(u32); 	// m_tr.w
+		data_ptr += sizeof(u32);  // m_tr.h
+		data_ptr += sizeof(u64);  // m_tr.m_blit
+		data_ptr += sizeof(u64);  // m_tr.m_pos
+		data_ptr += sizeof(u64);  // m_tr.m_reg
+		data_ptr += sizeof(u128); // m_tr.rect
+		data_ptr += sizeof(u32);  // m_tr.total
+		data_ptr += sizeof(u32);  // m_tr.start
+		data_ptr += sizeof(u32);  // m_tr.end
+		data_ptr += sizeof(u8);   // m_tr.write
+	}
+
 	qword_t* vram_packet = aligned_alloc(64, sizeof(qword_t) * 0x50005);
 
-	u8* swizzle_vram = aligned_alloc(64, 0x400000);
-	// The current data is 'RAW' vram data, so deswizzle it, so when we upload it
-	// the GS with swizzle it back to it's 'RAW' format.
-	deswizzleImage(swizzle_vram, data_ptr, 1024 / 64, 1024 / 32);
+	u8* swizzle_vram = aligned_alloc(64, 0x4000 * sizeof(qword_t));
 
 	q = vram_packet;
 	// Set up our registers for the transfer
@@ -490,15 +501,19 @@ void gs_set_state(u8* data_ptr, u32 version)
 	dma_channel_send_normal(DMA_CHANNEL_GIF, vram_packet, q - vram_packet, 0, 0);
 	dma_channel_wait(DMA_CHANNEL_GIF, 0);
 
-	qword_t* vram_ptr = (qword_t*)swizzle_vram;
 	for (int i = 0; i < 16; i++)
 	{
 		q = vram_packet;
 		PACK_GIFTAG(q, GIF_SET_TAG(0x4000, i == 15 ? 1 : 0, 0, 0, 2, 0), 0);
 		q++;
-		memcpy(q, vram_ptr, 0x4000 * sizeof(qword_t));
+
+		// The current data is 'RAW' vram data, so deswizzle it, so when we upload it
+		// the GS with swizzle it back to it's 'RAW' format.
+		memcpy(swizzle_vram, data_ptr, 0x4000 * sizeof(qword_t));
+		deswizzleImage((u8*)q, swizzle_vram, 1024 / 64, 1024 / 32 / 16);
+
 		q += 0x4000;
-		vram_ptr += 0x4000;
+		data_ptr += 0x4000 * sizeof(qword_t);
 
 		dma_channel_send_normal(DMA_CHANNEL_GIF, vram_packet, q - vram_packet, 0, 0);
 		dma_channel_wait(DMA_CHANNEL_GIF, 0);
