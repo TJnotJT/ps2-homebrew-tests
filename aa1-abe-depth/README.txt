@@ -1,0 +1,1 @@
+Purpose is to draw a triangles with different combinations of AA1, ABE, and (alpha) to determine how it influences written/tested alpha.
