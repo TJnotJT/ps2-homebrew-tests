@@ -1,1 +1,35 @@
 Most of this code is taken/modified from https://github.com/F0bes/gs4ps2qt and https://github.com/F0bes/gs4ps2.
+
+To use you should have a way of running ELF files from a USB drive, such as FreeMCBoot with ulaunchELF. Then use the follownig steps:
+1. Compile the "runner-usb.elf" and copy it to the root directory of the USB drive.
+2. Copy an extracted GS dump (i.e. ".gs" extension) to the same directory.
+3. Create a config file (decribed below) named "gs-dump-runner-2.txt" in the same directory.
+4. Run "runner-usb.elf" and wait until the screen turns fully green, which means the frame is dumped.
+
+Important: the GS dump file must be small enough to fit in the PS2 main memory, so less than 32 MB.
+
+Config file example:
+```
+mode: vsync
+num: 2
+bwpx: 512
+psm: PSM_32
+block: 0x0
+x: 0
+y: 0
+width: 512
+height: 448
+filename_dump: sotc-moon.gs
+filename_save: sotc-moon-frame-2.bmp
+```
+- `mode: vsync`: dump counting by frames (the other option is `packets`).
+- `num: 2`: dump the second frame (or second packet if `mode: packets`).
+- `bwpx: 512`: buffer width to dump in pixels (usually same as the frame width).
+- `psm: PSM_32`: frame is `PSM_32` format. The options are `PSM_32`, `PSM_24`, `PSM_16`, `PSM_16S`, `PSMZ_32`, `PSMZ_24`, `PSMZ_16`, `PSMZ_16S`.
+- `block: 0x0`: block address of the frame. This must be obtained by e.g. dumping the frames in PCSX2.
+- `x: 0`: x offset of the frame in the buffer is `0` (`0` is almost always what you want).
+- `y: 0`: y offset of the frame in the buffer is `0` (`0` is almost always what you want).
+- `width: 512`: width of the frame in pixels (usually same as the buffer width).
+- `height: 448`: height of the frame in pixels.
+- `filename_dump: sotc-moon.gs`: name of the GS dump file on the USB.
+- `filename_save: sotc-moon-frame-2.bmp`: name of the file to save the frame to. Only outputs bmp format.
