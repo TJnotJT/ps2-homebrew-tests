@@ -1,0 +1,1 @@
+The purpose of this test is to test what happends when incompatible combinations of frame PSM and Z buffer ZSM are used together.
