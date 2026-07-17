@@ -35,12 +35,34 @@
 #define FRAME_HEIGHT 256
 #define WINDOW_X (2048 - FRAME_WIDTH / 2)
 #define WINDOW_Y (2048 - FRAME_HEIGHT / 2)
+#define TEX_SIZE 64
+#define TEX_CHECKER_SIZE 8
+#define TEX_COLOR_1 ((unsigned int)0xFC00)
+#define TEX_COLOR_2 ((unsigned int)0x83E0)
 
 framebuffer_t g_frame; // Frame buffer
 zbuffer_t g_z; // Z buffer
+texbuffer_t g_texbuf;
 blend_t g_blend;
 
 u8 g_frame_data[FRAME_WIDTH * FRAME_HEIGHT * 4] __attribute__((aligned(64)));
+unsigned char TEXTURE_DATA[TEX_SIZE][TEX_SIZE][2] __attribute__((aligned(16)));
+
+void init_texture_data() {
+  for (int x = 0; x < TEX_SIZE; x++) {
+    for (int y = 0; y < TEX_SIZE; y++) {
+      if (((x / TEX_CHECKER_SIZE) & 1) ^ ((y / TEX_CHECKER_SIZE) & 1)) {
+        TEXTURE_DATA[y][x][0] = (TEX_COLOR_1 >> 0) & 0xFF;
+        TEXTURE_DATA[y][x][1] = (TEX_COLOR_1 >> 8) & 0xFF;
+      } else {
+        TEXTURE_DATA[y][x][0] = (TEX_COLOR_2 >> 0) & 0xFF;
+        TEXTURE_DATA[y][x][1] = (TEX_COLOR_2 >> 8) & 0xFF;
+      }
+    }
+  }
+
+	FlushCache(0);
+}
 
 int graph_initialize_custom()
 {
@@ -73,6 +95,10 @@ void init_gs()
 	g_z.zsm = 0;
 	g_z.address = graph_vram_allocate(FRAME_WIDTH, FRAME_HEIGHT, GS_PSMZ_32, GRAPH_ALIGN_PAGE);
 
+  g_texbuf.width = TEX_SIZE;
+  g_texbuf.psm = GS_PSM_16;
+  g_texbuf.address = graph_vram_allocate(TEX_SIZE, TEX_SIZE, GS_PSM_16, GRAPH_ALIGN_BLOCK);
+
 	g_blend.alpha = BLEND_ALPHA_SOURCE;
 	g_blend.color1 = BLEND_COLOR_SOURCE;
 	g_blend.color2 = BLEND_COLOR_DEST;
@@ -80,6 +106,58 @@ void init_gs()
 	g_blend.fixed_alpha = 0;
 
 	graph_initialize_custom();
+}
+
+void load_texture(texbuffer_t* texbuf) {
+  qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 8192);
+
+  qword_t* q = packet;
+
+  q = draw_texture_transfer(q, TEXTURE_DATA, TEX_SIZE, TEX_SIZE, GS_PSM_16, texbuf->address, texbuf->width);
+  q = draw_texture_flush(q);
+
+  dma_channel_send_chain(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+  dma_wait_fast();
+
+  free(packet);
+}
+
+void setup_texture(texbuffer_t* texbuf) {
+  qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 8192);
+
+  qword_t* q = packet;
+
+  // Using a texture involves setting up a lot of information.
+  clutbuffer_t clut;
+
+  lod_t lod;
+
+  lod.calculation = LOD_USE_K;
+  lod.max_level = 0;
+  lod.mag_filter = LOD_MAG_NEAREST;
+  lod.min_filter = LOD_MIN_NEAREST;
+  lod.l = 0;
+  lod.k = 0;
+
+  texbuf->info.width = draw_log2(TEX_SIZE);
+  texbuf->info.height = draw_log2(TEX_SIZE);
+  texbuf->info.components = TEXTURE_COMPONENTS_RGBA;
+  texbuf->info.function = TEXTURE_FUNCTION_DECAL;
+
+  clut.storage_mode = CLUT_STORAGE_MODE1;
+  clut.start = 0;
+  clut.psm = 0;
+  clut.load_method = CLUT_NO_LOAD;
+  clut.address = 0;
+
+  q = draw_texture_sampling(q, 0, &lod);
+  q = draw_texturebuffer(q, 0, texbuf, &clut);
+
+  // Now send the packet, no need to wait since it's the first.
+  dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
+  dma_wait_fast();
+
+  free(packet);
 }
 
 qword_t *my_draw_disable_tests(qword_t *q, int context)
@@ -105,7 +183,7 @@ qword_t *my_draw_set_alpha_test(qword_t *q, int context)
 	return q;
 }
 
-qword_t* my_draw_clear(qword_t* q, unsigned rgb)
+qword_t* my_draw_clear(qword_t* q, unsigned rgb, unsigned z)
 {
 	color_t bg_color;
 	bg_color.r = rgb & 0xFF;
@@ -120,9 +198,9 @@ qword_t* my_draw_clear(qword_t* q, unsigned rgb)
 	q++;
 	PACK_GIFTAG(q, bg_color.rgbaq, GIF_REG_RGBAQ);
 	q++;
-	PACK_GIFTAG(q, GIF_SET_XYZ(WINDOW_X << 4, WINDOW_Y << 4, 0), GIF_REG_XYZ2);
+	PACK_GIFTAG(q, GIF_SET_XYZ(WINDOW_X << 4, WINDOW_Y << 4, z), GIF_REG_XYZ2);
 	q++;
-	PACK_GIFTAG(q, GIF_SET_XYZ((WINDOW_X + FRAME_WIDTH) << 4, (WINDOW_Y + FRAME_HEIGHT) << 4, 0), GIF_REG_XYZ2);
+	PACK_GIFTAG(q, GIF_SET_XYZ((WINDOW_X + FRAME_WIDTH) << 4, (WINDOW_Y + FRAME_HEIGHT) << 4, z), GIF_REG_XYZ2);
 	q++;
 	return q;
 }
@@ -131,7 +209,7 @@ void my_draw_clear_send(unsigned rgb)
 {
 	qword_t* packet = aligned_alloc(64, sizeof(qword_t) * 32);
 	qword_t* q = packet;
-	q = my_draw_clear(q, rgb);
+	q = my_draw_clear(q, rgb, 0);
 	q = draw_finish(q);
 
 	dma_wait_fast();
@@ -183,6 +261,54 @@ qword_t* my_draw_triangle(qword_t* q)
 	return q;
 }
 
+qword_t* my_draw_sprite(qword_t* q)
+{
+	const int x = 16 * WINDOW_X;
+	const int y = 16 * WINDOW_Y;
+
+	const int x0 = x;
+	const int y0 = y;
+	const int x1 = x + 128 * 16;
+	const int y1 = y + 128 * 16;
+
+	const int u0 = 0;
+	const int v0 = 0;
+	const int u1 = u0 + TEX_SIZE * 16;
+	const int v1 = v0 + TEX_SIZE * 16;
+
+  const int z = 0;
+
+	color_t color;
+	color.a = 0;
+	color.r = 0;
+	color.g = 0;
+	color.b = 0;
+	color.q = 1.0f;
+
+  PACK_GIFTAG(q, GIF_SET_TAG(6, 0, 0, 0, GIF_FLG_PACKED, 1), GIF_REG_AD);
+  q++;
+
+  PACK_GIFTAG(q, GS_SET_PRIM(GS_PRIM_SPRITE, 0, 1, 0, 0, 0, 1, 0, 0), GIF_REG_PRIM);
+  q++;
+
+  PACK_GIFTAG(q, color.rgbaq, GS_REG_RGBAQ);
+  q++;
+
+  PACK_GIFTAG(q, GS_SET_UV(u0, v0), GS_REG_UV);
+  q++;
+
+	PACK_GIFTAG(q, GS_SET_XYZ(x0, y0, z), GS_REG_XYZ2);
+  q++;
+
+	PACK_GIFTAG(q, GS_SET_UV(u1, v1), GS_REG_UV);
+  q++;
+
+  PACK_GIFTAG(q, GS_SET_XYZ(x1, y1, z), GS_REG_XYZ2);
+  q++;
+
+	return q;
+}
+
 int render_test(int frame_psm, int zbuf_zsm)
 {
 	srand(123);
@@ -207,7 +333,7 @@ int render_test(int frame_psm, int zbuf_zsm)
 	q = packet;
 	q = draw_setup_environment(q, 0, &frame, &z);
 	q = draw_primitive_xyoffset(q, 0, WINDOW_X, WINDOW_Y);
-	q = my_draw_clear(q, 0);
+	q = my_draw_clear(q, 0xff, 0xff00);
 	// q = my_draw_set_alpha_test(q, 0);
 	q = my_draw_disable_tests(q, 0);
 	q = draw_alpha_blending(q, 0, &g_blend);
@@ -217,7 +343,8 @@ int render_test(int frame_psm, int zbuf_zsm)
 	draw_wait_finish();
 
 	q = packet;
-	q = my_draw_triangle(q);
+	// q = my_draw_triangle(q);
+	q = my_draw_sprite(q);
 	dma_channel_send_normal(DMA_CHANNEL_GIF, packet, q - packet, 0, 0);
 	dma_channel_wait(DMA_CHANNEL_GIF, 0);
 
@@ -237,9 +364,15 @@ int render_test(int frame_psm, int zbuf_zsm)
 
 int main(int argc, char *argv[])
 {
+	init_texture_data();
+
 	dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
 	
   init_gs();
+
+	load_texture(&g_texbuf);
+
+  setup_texture(&g_texbuf);
 
 	// C32 and Z32
 	{
