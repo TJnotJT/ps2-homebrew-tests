@@ -121,7 +121,7 @@ int write_bmp_to_usb(const char* filename, const u8* data, u32 width, u32 height
 	if (set_debug_color)
 		set_debug_color(COLOR_WAIT_USB2);
 
-	if (write_bmp(filename, data, width, height, gs_psm_bpp(psm)) != 0)
+	if (write_bmp(filename, data, width, height, gs_psm_bpp(psm), gs_psm_depth(psm)) != 0)
 	{
 		if (set_debug_color)
 			set_debug_color(COLOR_FAIL); // Red background if BMP write failed

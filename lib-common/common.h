@@ -35,6 +35,29 @@ static inline u32 gs_psm_bpp(u32 psm)
   return 0; // Should never reach here, but added to avoid compiler warnings
 }
 
+static inline u32 gs_psm_depth(u32 psm)
+{
+  switch (psm)
+  {
+    case GS_PSM_32: return 0;
+    case GS_PSM_24: return 0;
+    case GS_PSM_16: return 0;
+    case GS_PSM_16S: return 0;
+    case GS_PSM_PS24: return 0;
+    case GS_PSM_8: return 0;
+    case GS_PSM_4: return 0;
+    case GS_PSM_8H: return 0;
+    case GS_PSM_4HL: return 0;
+    case GS_PSM_4HH: return 0;
+    case GS_PSMZ_32: return 1;
+    case GS_PSMZ_24: return 1;
+    case GS_PSMZ_16: return 1;
+    case GS_PSMZ_16S: return 1;
+    default: assert(0 && "Unsupported PSM in gs_psm_bpp");
+  }
+  return 0; // Should never reach here, but added to avoid compiler warnings
+}
+
 typedef union uv_t {
 	struct {
 		u16 u;

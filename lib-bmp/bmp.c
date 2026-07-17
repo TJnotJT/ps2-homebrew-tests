@@ -32,7 +32,7 @@ typedef struct {
 
 #pragma pack(pop)
 
-int write_bmp(const char* filename, const u8* pixelData, int width, int height, int bitsPerPixel)
+int write_bmp(const char* filename, const u8* pixelData, int width, int height, int bitsPerPixel, int depth)
 {
     u8* pixelDataBGR = (u8*)aligned_alloc(64, width * height * 4);
 
@@ -43,25 +43,48 @@ int write_bmp(const char* filename, const u8* pixelData, int width, int height, 
 
     // Convert to BGR format
     for (int i = 0; i < width * height; i++) {
-        if (bitsPerPixel == 24) {
-            pixelDataBGR[i * 4 + 0] = pixelData[i * 3 + 2]; // B
-            pixelDataBGR[i * 4 + 1] = pixelData[i * 3 + 1]; // G
-            pixelDataBGR[i * 4 + 2] = pixelData[i * 3 + 0]; // R
-            pixelDataBGR[i * 4 + 3] = 255;                  // A (not used in 24-bit)
-        } else if (bitsPerPixel == 32) {
-            pixelDataBGR[i * 4 + 0] = pixelData[i * 4 + 2]; // B
-            pixelDataBGR[i * 4 + 1] = pixelData[i * 4 + 1]; // G
-            pixelDataBGR[i * 4 + 2] = pixelData[i * 4 + 0]; // R
-            pixelDataBGR[i * 4 + 3] = pixelData[i * 4 + 3]; // A (Alpha, if present)
-        } else if (bitsPerPixel == 16) {
-            pixelDataBGR[i * 4 + 0] = ((int)pixelData[i * 2 + 1] << 1) & 0xF8;
-            pixelDataBGR[i * 4 + 1] = ((((int)pixelData[i * 2 + 0]) >> 2) & 0x38) | (((int)pixelData[i * 2 + 1] << 6) & 0xC0);
-            pixelDataBGR[i * 4 + 2] = (((int)pixelData[i * 2 + 0]) << 3) & 0xF8;
-            pixelDataBGR[i * 4 + 3] = ((int)pixelData[i * 2 + 1]) & 0x80;
+        if (depth) {
+            if (bitsPerPixel == 24) {
+                pixelDataBGR[i * 4 + 0] = pixelData[i * 3 + 2]; // B
+                pixelDataBGR[i * 4 + 1] = pixelData[i * 3 + 1]; // G
+                pixelDataBGR[i * 4 + 2] = pixelData[i * 3 + 0]; // R
+                pixelDataBGR[i * 4 + 3] = 255;                  // A (not used in 24-bit)
+            } else if (bitsPerPixel == 32) {
+                pixelDataBGR[i * 4 + 0] = pixelData[i * 4 + 2]; // B
+                pixelDataBGR[i * 4 + 1] = pixelData[i * 4 + 1]; // G
+                pixelDataBGR[i * 4 + 2] = pixelData[i * 4 + 0]; // R
+                pixelDataBGR[i * 4 + 3] = pixelData[i * 4 + 3]; // A (Alpha, if present)
+            } else if (bitsPerPixel == 16) {
+                pixelDataBGR[i * 4 + 0] = 0; // B
+                pixelDataBGR[i * 4 + 1] = pixelData[i * 2 + 1]; // G
+                pixelDataBGR[i * 4 + 2] = pixelData[i * 2 + 0]; // R
+                pixelDataBGR[i * 4 + 3] = 255; // A (Alpha, if present)
+            } else {
+                printf("Unsupported bits per pixel: %d\n", bitsPerPixel);
+                free(pixelDataBGR);
+                return -1;
+            }
         } else {
-            printf("Unsupported bits per pixel: %d\n", bitsPerPixel);
-            free(pixelDataBGR);
-            return -1;
+            if (bitsPerPixel == 24) {
+                pixelDataBGR[i * 4 + 0] = pixelData[i * 3 + 2]; // B
+                pixelDataBGR[i * 4 + 1] = pixelData[i * 3 + 1]; // G
+                pixelDataBGR[i * 4 + 2] = pixelData[i * 3 + 0]; // R
+                pixelDataBGR[i * 4 + 3] = 255;                  // A (not used in 24-bit)
+            } else if (bitsPerPixel == 32) {
+                pixelDataBGR[i * 4 + 0] = pixelData[i * 4 + 2]; // B
+                pixelDataBGR[i * 4 + 1] = pixelData[i * 4 + 1]; // G
+                pixelDataBGR[i * 4 + 2] = pixelData[i * 4 + 0]; // R
+                pixelDataBGR[i * 4 + 3] = pixelData[i * 4 + 3]; // A (Alpha, if present)
+            } else if (bitsPerPixel == 16) {
+                pixelDataBGR[i * 4 + 0] = ((int)pixelData[i * 2 + 1] << 1) & 0xF8;
+                pixelDataBGR[i * 4 + 1] = ((((int)pixelData[i * 2 + 0]) >> 2) & 0x38) | (((int)pixelData[i * 2 + 1] << 6) & 0xC0);
+                pixelDataBGR[i * 4 + 2] = (((int)pixelData[i * 2 + 0]) << 3) & 0xF8;
+                pixelDataBGR[i * 4 + 3] = ((int)pixelData[i * 2 + 1]) & 0x80;
+            } else {
+                printf("Unsupported bits per pixel: %d\n", bitsPerPixel);
+                free(pixelDataBGR);
+                return -1;
+            }
         }
     }
 
